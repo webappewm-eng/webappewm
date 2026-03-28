@@ -1,0 +1,11 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Authenticated users can read public assets and uploads.
+    match /{allPaths=**} {
+      allow read: if request.auth != null;
+      // Only admins should write from trusted backend/admin flows.
+      allow write: if false;
+    }
+  }
+}

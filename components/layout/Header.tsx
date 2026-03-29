@@ -1,17 +1,18 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { logoutUser } from "@/lib/firebase/auth";
 import { getNavigationLinks, getSiteSettings } from "@/lib/firebase/data";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { NavigationLink, SiteSettings } from "@/lib/types";
 
 interface HeaderProps {
-  onOpenLogin: () => void;
+  onOpenLogin?: () => void;
   searchValue?: string;
   onSearchChange?: (value: string) => void;
+  showSearch?: boolean;
 }
 
 const fallbackHeaderLinks: NavigationLink[] = [
@@ -21,6 +22,7 @@ const fallbackHeaderLinks: NavigationLink[] = [
     href: "#categories",
     location: "header",
     order: 1,
+    parentId: "",
     enabled: true,
     openInNewTab: false,
     updatedAt: ""
@@ -31,6 +33,7 @@ const fallbackHeaderLinks: NavigationLink[] = [
     href: "#topics",
     location: "header",
     order: 2,
+    parentId: "",
     enabled: true,
     openInNewTab: false,
     updatedAt: ""
@@ -41,6 +44,7 @@ const fallbackHeaderLinks: NavigationLink[] = [
     href: "#subscribe",
     location: "header",
     order: 3,
+    parentId: "",
     enabled: true,
     openInNewTab: false,
     updatedAt: ""
@@ -75,35 +79,76 @@ function resolveHref(href: string, pathname: string): string {
   return href;
 }
 
-function LinkItem({ item, pathname }: { item: NavigationLink; pathname: string }) {
+function MenuLink({
+  item,
+  pathname,
+  childrenLinks
+}: {
+  item: NavigationLink;
+  pathname: string;
+  childrenLinks: NavigationLink[];
+}) {
   const href = resolveHref(item.href, pathname);
+  const hasChildren = childrenLinks.length > 0;
   const isPath = href.startsWith("/") || href.startsWith("#");
 
-  if (isPath) {
-    return (
-      <Link className="nav-link" href={href}>
-        {item.label}
-      </Link>
-    );
-  }
-
   return (
-    <a
-      className="nav-link"
-      href={href}
-      target={item.openInNewTab ? "_blank" : undefined}
-      rel={item.openInNewTab ? "noreferrer" : undefined}
-    >
-      {item.label}
-    </a>
+    <div className={`nav-item ${hasChildren ? "has-children" : ""}`}>
+      {isPath ? (
+        <Link className="nav-link" href={href}>
+          {item.label}
+        </Link>
+      ) : (
+        <a
+          className="nav-link"
+          href={href}
+          target={item.openInNewTab ? "_blank" : undefined}
+          rel={item.openInNewTab ? "noreferrer" : undefined}
+        >
+          {item.label}
+        </a>
+      )}
+
+      {hasChildren ? (
+        <div className="nav-submenu">
+          {childrenLinks.map((child) => {
+            const childHref = resolveHref(child.href, pathname);
+            const childIsPath = childHref.startsWith("/") || childHref.startsWith("#");
+            return childIsPath ? (
+              <Link key={child.id} className="nav-sub-link" href={childHref}>
+                {child.label}
+              </Link>
+            ) : (
+              <a
+                key={child.id}
+                className="nav-sub-link"
+                href={childHref}
+                target={child.openInNewTab ? "_blank" : undefined}
+                rel={child.openInNewTab ? "noreferrer" : undefined}
+              >
+                {child.label}
+              </a>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
-export function Header({ onOpenLogin, searchValue = "", onSearchChange }: HeaderProps) {
+export function Header({ onOpenLogin, searchValue = "", onSearchChange, showSearch = true }: HeaderProps) {
   const { profile } = useAuth();
   const pathname = usePathname();
+  const router = useRouter();
+
   const [menuLinks, setMenuLinks] = useState<NavigationLink[]>(fallbackHeaderLinks);
   const [siteSettings, setSiteSettings] = useState(fallbackSiteSettings);
+  const [themeMode, setThemeMode] = useState<"light" | "dark">("light");
+  const [internalSearch, setInternalSearch] = useState(searchValue);
+
+  useEffect(() => {
+    setInternalSearch(searchValue);
+  }, [searchValue]);
 
   useEffect(() => {
     async function loadLinks() {
@@ -132,6 +177,11 @@ export function Header({ onOpenLogin, searchValue = "", onSearchChange }: Header
           logoTitleLine2: settings.logoTitleLine2,
           logoAccentText: settings.logoAccentText
         });
+
+        const preferred = localStorage.getItem("ewm-theme") as "light" | "dark" | null;
+        const nextMode = preferred || settings.themeMode;
+        setThemeMode(nextMode);
+        document.documentElement.setAttribute("data-theme", nextMode);
       } catch {
         setSiteSettings(fallbackSiteSettings);
       }
@@ -140,10 +190,49 @@ export function Header({ onOpenLogin, searchValue = "", onSearchChange }: Header
     void loadSettings();
   }, []);
 
+  function toggleTheme() {
+    const nextMode: "light" | "dark" = themeMode === "dark" ? "light" : "dark";
+    setThemeMode(nextMode);
+    document.documentElement.setAttribute("data-theme", nextMode);
+    localStorage.setItem("ewm-theme", nextMode);
+  }
+
+  function handleSearchSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const value = internalSearch.trim();
+
+    if (onSearchChange) {
+      onSearchChange(value);
+      return;
+    }
+
+    if (!value) {
+      router.push("/");
+      return;
+    }
+
+    router.push(`/?search=${encodeURIComponent(value)}#topics`);
+  }
+
   const logoSizeStyle = useMemo(
     () => ({ width: `${siteSettings.logoSize}px`, height: `${siteSettings.logoSize}px` }),
     [siteSettings.logoSize]
   );
+
+  const topLinks = useMemo(() => menuLinks.filter((item) => !item.parentId), [menuLinks]);
+  const childrenMap = useMemo(() => {
+    const map: Record<string, NavigationLink[]> = {};
+    menuLinks.forEach((item) => {
+      if (!item.parentId) {
+        return;
+      }
+      if (!map[item.parentId]) {
+        map[item.parentId] = [];
+      }
+      map[item.parentId].push(item);
+    });
+    return map;
+  }, [menuLinks]);
 
   return (
     <header className="nav">
@@ -163,23 +252,36 @@ export function Header({ onOpenLogin, searchValue = "", onSearchChange }: Header
         </div>
       </Link>
 
-      <nav className="nav-links">
-        {menuLinks.map((item) => (
-          <LinkItem key={item.id} item={item} pathname={pathname} />
-        ))}
-      </nav>
+      <div className="nav-center">
+        <nav className="nav-links nav-menu">
+          {topLinks.map((item) => (
+            <MenuLink key={item.id} item={item} pathname={pathname} childrenLinks={childrenMap[item.id] ?? []} />
+          ))}
+        </nav>
 
-      {onSearchChange ? (
-        <input
-          className="nav-search"
-          type="search"
-          placeholder="Search topics"
-          value={searchValue}
-          onChange={(event) => onSearchChange(event.target.value)}
-        />
-      ) : null}
+        {showSearch ? (
+          <form className="nav-search-wrap" onSubmit={handleSearchSubmit}>
+            <input
+              className="nav-search"
+              type="search"
+              placeholder="Search topics, posts, courses"
+              value={internalSearch}
+              onChange={(event) => {
+                const value = event.target.value;
+                setInternalSearch(value);
+                if (onSearchChange) {
+                  onSearchChange(value);
+                }
+              }}
+            />
+          </form>
+        ) : null}
+      </div>
 
-      <div className="nav-links">
+      <div className="nav-links nav-actions">
+        <button className="nav-btn secondary" onClick={toggleTheme} type="button">
+          {themeMode === "dark" ? "Light" : "Dark"}
+        </button>
         {profile?.isAdmin ? (
           <Link href="/admin" className="nav-btn secondary">
             Admin
@@ -195,7 +297,7 @@ export function Header({ onOpenLogin, searchValue = "", onSearchChange }: Header
             Logout
           </button>
         ) : (
-          <button className="nav-btn" onClick={onOpenLogin}>
+          <button className="nav-btn" onClick={() => onOpenLogin?.()}>
             Login
           </button>
         )}
@@ -203,3 +305,4 @@ export function Header({ onOpenLogin, searchValue = "", onSearchChange }: Header
     </header>
   );
 }
+

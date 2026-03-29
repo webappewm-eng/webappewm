@@ -1,11 +1,11 @@
-"use client";
+﻿"use client";
 
 import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Footer } from "@/components/layout/Footer";
-import { uploadPostImage, uploadSiteAsset } from "@/lib/firebase/storage";
 import { Header } from "@/components/layout/Header";
 import { RichPostEditor } from "@/components/editor/RichPostEditor";
+import { uploadPostImage, uploadSiteAsset } from "@/lib/firebase/storage";
 import {
   createCategory,
   createCustomPage,
@@ -15,6 +15,9 @@ import {
   createPost,
   createSubtopic,
   createThirdPartyScript,
+  createWebinar,
+  createCourse,
+  createCertificateTemplate,
   deleteCategory,
   deleteCustomPage,
   deleteHeroMedia,
@@ -22,10 +25,14 @@ import {
   deletePost,
   deleteSubtopic,
   deleteThirdPartyScript,
+  deleteWebinar,
+  deleteCourse,
+  deleteCertificateTemplate,
   getAnalyticsSummary,
   getCategories,
   getCustomPages,
   getFeedback,
+  getPostAnalyticsBreakdown,
   getHeroMediaForAdmin,
   getNotifications,
   getNavigationLinksForAdmin,
@@ -33,6 +40,12 @@ import {
   getSiteSettings,
   getSubtopics,
   getThirdPartyScripts,
+  getWebinars,
+  getWebinarRegistrations,
+  getCourses,
+  getCourseProgressForAdmin,
+  getCertificateTemplates,
+  getCertificatesForAdmin,
   listSubscriptions,
   updateCategory,
   updateCustomPage,
@@ -43,7 +56,10 @@ import {
   updatePost,
   updateSiteAppearanceSettings,
   updateSubtopic,
-  updateThirdPartyScript
+  updateThirdPartyScript,
+  updateWebinar,
+  updateCourse,
+  updateCertificateTemplate
 } from "@/lib/firebase/data";
 import {
   AnalyticsSummary,
@@ -54,12 +70,18 @@ import {
   NavigationLink,
   NotificationMessage,
   Post,
+  PostAnalyticsBreakdown,
   SiteSettings,
   Subscription,
   Subtopic,
-  ThirdPartyScript
+  ThirdPartyScript,
+  Webinar,
+  WebinarRegistration,
+  Course,
+  UserCourseProgress,
+  CertificateTemplate,
+  UserCertificate
 } from "@/lib/types";
-
 const emptyPostForm = {
   title: "",
   slug: "",
@@ -84,6 +106,38 @@ const emptyPageForm = {
   isPublished: true
 };
 
+const emptyWebinarForm = {
+  title: "",
+  slug: "",
+  description: "",
+  bannerImage: "",
+  startAt: "",
+  endAt: "",
+  meetingUrl: "",
+  isPublished: true,
+  showOnHome: true,
+  showPublicPage: true
+};
+
+const emptyCourseForm = {
+  title: "",
+  slug: "",
+  description: "",
+  coverImage: "",
+  templateId: "",
+  passingScore: "70",
+  lessonsInput: "",
+  questionsInput: "",
+  isPublished: true
+};
+
+const emptyTemplateForm = {
+  name: "",
+  backgroundImage: "",
+  signatureImage: "",
+  enabled: true
+};
+
 function slugify(value: string): string {
   return value
     .toLowerCase()
@@ -92,6 +146,59 @@ function slugify(value: string): string {
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-");
 }
+
+function parseLessonsInput(raw: string): Course["lessons"] {
+  return raw
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line, index) => {
+      const [titleRaw, ...contentParts] = line.split("::");
+      const title = titleRaw?.trim() || `Lesson ${index + 1}`;
+      const content = contentParts.join("::").trim() || "Add lesson content";
+      return {
+        id: `lesson-${index + 1}`,
+        title,
+        content,
+        order: index + 1
+      };
+    });
+}
+
+function parseQuestionsInput(raw: string): Course["questions"] {
+  return raw
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [questionRaw, optionsRaw, correctRaw] = line.split("||");
+      const options = (optionsRaw ?? "")
+        .split("|")
+        .map((item) => item.trim())
+        .filter(Boolean);
+
+      return {
+        question: (questionRaw ?? "Question").trim(),
+        options: options.length ? options : ["Option A", "Option B"],
+        correctOptionIndex: Math.min(options.length ? options.length - 1 : 0, Math.max(0, Number(correctRaw ?? "0") || 0))
+      };
+    });
+}
+
+function lessonsToInput(lessons: Course["lessons"]): string {
+  return lessons
+    .slice()
+    .sort((a, b) => a.order - b.order)
+    .map((lesson) => `${lesson.title}::${lesson.content}`)
+    .join("\n");
+}
+
+function questionsToInput(questions: Course["questions"]): string {
+  return questions
+    .map((question) => `${question.question}||${question.options.join("|")}||${question.correctOptionIndex}`)
+    .join("\n");
+}
+
 export default function AdminPage() {
   const { profile, loading } = useAuth();
 
@@ -108,12 +215,22 @@ export default function AdminPage() {
     activeUsers: 0,
     views: 0,
     downloads: 0,
+    shares: 0,
     feedbackCount: 0
   });
+  const [postAnalytics, setPostAnalytics] = useState<PostAnalyticsBreakdown[]>([]);
+  const [webinars, setWebinars] = useState<Webinar[]>([]);
+  const [webinarRegistrations, setWebinarRegistrations] = useState<WebinarRegistration[]>([]);
+  const [coursesData, setCoursesData] = useState<Course[]>([]);
+  const [courseProgress, setCourseProgress] = useState<UserCourseProgress[]>([]);
+  const [certificateTemplates, setCertificateTemplates] = useState<CertificateTemplate[]>([]);
+  const [certificates, setCertificates] = useState<UserCertificate[]>([]);
+
   const [settings, setSettings] = useState<SiteSettings>({
     id: "global",
     liveTrackingEnabled: true,
     themeMode: "light",
+    layoutSideGap: 32,
     logoMode: "text",
     logoImageUrl: "",
     logoSize: 38,
@@ -160,6 +277,7 @@ export default function AdminPage() {
 
   const [appearanceForm, setAppearanceForm] = useState({
     themeMode: "light" as SiteSettings["themeMode"],
+    layoutSideGap: "32",
     logoMode: "text" as SiteSettings["logoMode"],
     logoImageUrl: "",
     logoSize: "38",
@@ -184,6 +302,7 @@ export default function AdminPage() {
     href: "",
     location: "header" as NavigationLink["location"],
     order: "1",
+    parentId: "",
     enabled: true,
     openInNewTab: false
   });
@@ -195,6 +314,14 @@ export default function AdminPage() {
     notFoundButtonLabel: "Go to Home"
   });
 
+  const [webinarForm, setWebinarForm] = useState(emptyWebinarForm);
+  const [webinarEditingId, setWebinarEditingId] = useState("");
+
+  const [courseForm, setCourseForm] = useState(emptyCourseForm);
+  const [courseEditingId, setCourseEditingId] = useState("");
+
+  const [templateForm, setTemplateForm] = useState(emptyTemplateForm);
+  const [templateEditingId, setTemplateEditingId] = useState("");
 
   const [status, setStatus] = useState("");
   const [siteOrigin, setSiteOrigin] = useState("");
@@ -216,7 +343,14 @@ export default function AdminPage() {
       nextNotifications,
       nextNavLinks,
       nextAnalytics,
-      nextSettings
+      nextPostAnalytics,
+      nextSettings,
+      nextWebinars,
+      nextWebinarRegistrations,
+      nextCourses,
+      nextCourseProgress,
+      nextTemplates,
+      nextCertificates
     ] = await Promise.all([
       getCategories(),
       getSubtopics(),
@@ -229,7 +363,14 @@ export default function AdminPage() {
       getNotifications(),
       getNavigationLinksForAdmin(),
       getAnalyticsSummary(),
-      getSiteSettings()
+      getPostAnalyticsBreakdown(),
+      getSiteSettings(),
+      getWebinars(true),
+      getWebinarRegistrations(),
+      getCourses(true),
+      getCourseProgressForAdmin(),
+      getCertificateTemplates(),
+      getCertificatesForAdmin()
     ]);
 
     setCategories(nextCategories);
@@ -243,7 +384,15 @@ export default function AdminPage() {
     setNotifications(nextNotifications);
     setNavigationLinks(nextNavLinks);
     setAnalytics(nextAnalytics);
+    setPostAnalytics(nextPostAnalytics);
     setSettings(nextSettings);
+    setWebinars(nextWebinars);
+    setWebinarRegistrations(nextWebinarRegistrations);
+    setCoursesData(nextCourses);
+    setCourseProgress(nextCourseProgress);
+    setCertificateTemplates(nextTemplates);
+    setCertificates(nextCertificates);
+
     setNotFoundForm({
       notFoundRedirectType: nextSettings.notFoundRedirectType,
       notFoundRedirectPath: nextSettings.notFoundRedirectPath,
@@ -252,6 +401,7 @@ export default function AdminPage() {
 
     setAppearanceForm({
       themeMode: nextSettings.themeMode,
+      layoutSideGap: String(nextSettings.layoutSideGap),
       logoMode: nextSettings.logoMode,
       logoImageUrl: nextSettings.logoImageUrl,
       logoSize: String(nextSettings.logoSize),
@@ -268,6 +418,7 @@ export default function AdminPage() {
       geminiEnabled: nextSettings.geminiEnabled,
       geminiModel: nextSettings.geminiModel
     });
+
     setSubtopicForm((prev) => {
       if (prev.categoryId || !nextCategories[0]) {
         return prev;
@@ -289,6 +440,13 @@ export default function AdminPage() {
         return prev;
       }
       return { ...prev, topicId: nextSubtopics[0].id };
+    });
+
+    setCourseForm((prev) => {
+      if (prev.templateId || !nextTemplates.length) {
+        return prev;
+      }
+      return { ...prev, templateId: nextTemplates.find((item) => item.enabled)?.id ?? nextTemplates[0].id };
     });
   }, []);
   useEffect(() => {
@@ -312,6 +470,29 @@ export default function AdminPage() {
     });
     return map;
   }, [posts]);
+  const registrationsByWebinar = useMemo(() => {
+    const map: Record<string, number> = {};
+    webinarRegistrations.forEach((item) => {
+      map[item.webinarId] = (map[item.webinarId] ?? 0) + 1;
+    });
+    return map;
+  }, [webinarRegistrations]);
+
+  const courseTitleById = useMemo(() => {
+    const map: Record<string, string> = {};
+    coursesData.forEach((item) => {
+      map[item.id] = item.title;
+    });
+    return map;
+  }, [coursesData]);
+
+  const templateNameById = useMemo(() => {
+    const map: Record<string, string> = {};
+    certificateTemplates.forEach((item) => {
+      map[item.id] = item.name;
+    });
+    return map;
+  }, [certificateTemplates]);
 
   if (loading) {
     return (
@@ -551,8 +732,11 @@ export default function AdminPage() {
   async function handleAppearanceSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
+    const nextSideGap = Math.max(8, Math.min(96, Number(appearanceForm.layoutSideGap || "32") || 32));
+
     await updateSiteAppearanceSettings({
       themeMode: appearanceForm.themeMode,
+      layoutSideGap: nextSideGap,
       logoMode: appearanceForm.logoMode,
       logoImageUrl: appearanceForm.logoImageUrl,
       logoSize: Number(appearanceForm.logoSize || "38"),
@@ -569,6 +753,10 @@ export default function AdminPage() {
       geminiEnabled: appearanceForm.geminiEnabled,
       geminiModel: appearanceForm.geminiModel
     });
+
+    if (typeof window !== "undefined") {
+      document.documentElement.style.setProperty("--container-pad", `${nextSideGap}px`);
+    }
 
     setStatus("Appearance and SEO settings updated.");
     await refreshAll();
@@ -656,6 +844,7 @@ export default function AdminPage() {
       href: navForm.href.trim(),
       location: navForm.location,
       order: Number(navForm.order || "0"),
+      parentId: navForm.parentId.trim(),
       enabled: navForm.enabled,
       openInNewTab: navForm.openInNewTab
     };
@@ -678,6 +867,7 @@ export default function AdminPage() {
       href: "",
       location: "header",
       order: "1",
+      parentId: "",
       enabled: true,
       openInNewTab: false
     });
@@ -694,6 +884,204 @@ export default function AdminPage() {
     });
 
     setStatus("404 page settings updated.");
+    await refreshAll();
+  }
+
+  async function handleWebinarBannerUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    setUploadingImage(true);
+    setUploadStatus("");
+
+    try {
+      const url = await uploadSiteAsset(file);
+      setWebinarForm((prev) => ({ ...prev, bannerImage: url }));
+      setUploadStatus("Webinar banner uploaded.");
+    } catch {
+      setUploadStatus("Webinar banner upload failed.");
+    } finally {
+      setUploadingImage(false);
+      event.target.value = "";
+    }
+  }
+
+  async function handleWebinarSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const startAt = webinarForm.startAt ? new Date(webinarForm.startAt).toISOString() : new Date().toISOString();
+    const endAt = webinarForm.endAt ? new Date(webinarForm.endAt).toISOString() : startAt;
+
+    const payload = {
+      title: webinarForm.title.trim(),
+      slug: slugify(webinarForm.slug || webinarForm.title),
+      description: webinarForm.description.trim(),
+      bannerImage: webinarForm.bannerImage.trim(),
+      startAt,
+      endAt,
+      meetingUrl: webinarForm.meetingUrl.trim(),
+      isPublished: webinarForm.isPublished,
+      showOnHome: webinarForm.showOnHome,
+      showPublicPage: webinarForm.showPublicPage
+    };
+
+    if (!payload.title || !payload.slug || !payload.meetingUrl) {
+      setStatus("Webinar title, slug and meeting URL are required.");
+      return;
+    }
+
+    if (webinarEditingId) {
+      await updateWebinar(webinarEditingId, payload);
+      setStatus("Webinar updated.");
+    } else {
+      await createWebinar(payload);
+      setStatus("Webinar created.");
+    }
+
+    setWebinarForm(emptyWebinarForm);
+    setWebinarEditingId("");
+    await refreshAll();
+  }
+
+  async function handleCourseCoverUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    setUploadingImage(true);
+    setUploadStatus("");
+
+    try {
+      const url = await uploadSiteAsset(file);
+      setCourseForm((prev) => ({ ...prev, coverImage: url }));
+      setUploadStatus("Course cover uploaded.");
+    } catch {
+      setUploadStatus("Course cover upload failed.");
+    } finally {
+      setUploadingImage(false);
+      event.target.value = "";
+    }
+  }
+
+  async function handleCourseSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const lessons = parseLessonsInput(courseForm.lessonsInput);
+    const questions = parseQuestionsInput(courseForm.questionsInput);
+
+    if (!lessons.length) {
+      setStatus("Add at least one lesson. Format: Lesson title::Lesson content");
+      return;
+    }
+
+    if (!questions.length) {
+      setStatus("Add at least one test question.");
+      return;
+    }
+
+    const payload = {
+      title: courseForm.title.trim(),
+      slug: slugify(courseForm.slug || courseForm.title),
+      description: courseForm.description.trim(),
+      coverImage: courseForm.coverImage.trim(),
+      templateId: courseForm.templateId.trim(),
+      lessons,
+      passingScore: Math.max(1, Math.min(100, Number(courseForm.passingScore || "70") || 70)),
+      questions,
+      isPublished: courseForm.isPublished
+    };
+
+    if (!payload.title || !payload.slug) {
+      setStatus("Course title and slug are required.");
+      return;
+    }
+
+    if (courseEditingId) {
+      await updateCourse(courseEditingId, payload);
+      setStatus("Course updated.");
+    } else {
+      await createCourse(payload);
+      setStatus("Course created.");
+    }
+
+    setCourseForm((prev) => ({
+      ...emptyCourseForm,
+      templateId: prev.templateId
+    }));
+    setCourseEditingId("");
+    await refreshAll();
+  }
+
+  async function handleTemplateBackgroundUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    setUploadingImage(true);
+    setUploadStatus("");
+
+    try {
+      const url = await uploadSiteAsset(file);
+      setTemplateForm((prev) => ({ ...prev, backgroundImage: url }));
+      setUploadStatus("Certificate background uploaded.");
+    } catch {
+      setUploadStatus("Certificate background upload failed.");
+    } finally {
+      setUploadingImage(false);
+      event.target.value = "";
+    }
+  }
+
+  async function handleTemplateSignatureUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    setUploadingImage(true);
+    setUploadStatus("");
+
+    try {
+      const url = await uploadSiteAsset(file);
+      setTemplateForm((prev) => ({ ...prev, signatureImage: url }));
+      setUploadStatus("Certificate signature uploaded.");
+    } catch {
+      setUploadStatus("Certificate signature upload failed.");
+    } finally {
+      setUploadingImage(false);
+      event.target.value = "";
+    }
+  }
+
+  async function handleTemplateSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const payload = {
+      name: templateForm.name.trim(),
+      backgroundImage: templateForm.backgroundImage.trim(),
+      signatureImage: templateForm.signatureImage.trim(),
+      enabled: templateForm.enabled
+    };
+
+    if (!payload.name) {
+      setStatus("Template name is required.");
+      return;
+    }
+
+    if (templateEditingId) {
+      await updateCertificateTemplate(templateEditingId, payload);
+      setStatus("Certificate template updated.");
+    } else {
+      await createCertificateTemplate(payload);
+      setStatus("Certificate template created.");
+    }
+
+    setTemplateForm(emptyTemplateForm);
+    setTemplateEditingId("");
     await refreshAll();
   }
   const filteredSubtopics = subtopics.filter((item) => item.categoryId === postForm.categoryId);
@@ -714,6 +1102,7 @@ export default function AdminPage() {
               <div className="notice"><strong>Active users:</strong> {analytics.activeUsers}</div>
               <div className="notice"><strong>Post views:</strong> {analytics.views}</div>
               <div className="notice"><strong>Downloads:</strong> {analytics.downloads}</div>
+              <div className="notice"><strong>Shares:</strong> {analytics.shares}</div>
               <div className="notice"><strong>Feedback count:</strong> {analytics.feedbackCount}</div>
               <div className="notice"><strong>Subscriptions:</strong> {subscriptions.length}</div>
               <div className="notice"><strong>Notifications:</strong> {notifications.length}</div>
@@ -734,7 +1123,7 @@ export default function AdminPage() {
 
           <section className="admin-section admin-card">
             <h3>Theme, Logo, Preview and SEO Settings</h3>
-            <p className="muted">Manage dark mode, logo, preview gate, Gemini helper and SEO defaults.</p>
+            <p className="muted">Manage dark mode, global page side gap, logo, preview gate, Gemini helper and SEO defaults.</p>
             <form className="form-grid" onSubmit={handleAppearanceSubmit}>
               <select
                 value={appearanceForm.themeMode}
@@ -745,6 +1134,14 @@ export default function AdminPage() {
                 <option value="light">Light theme</option>
                 <option value="dark">Dark theme</option>
               </select>
+              <input
+                type="number"
+                min={8}
+                max={96}
+                placeholder="Global side gap (px)"
+                value={appearanceForm.layoutSideGap}
+                onChange={(event) => setAppearanceForm((prev) => ({ ...prev, layoutSideGap: event.target.value }))}
+              />
               <select
                 value={appearanceForm.logoMode}
                 onChange={(event) =>
@@ -1038,6 +1435,19 @@ export default function AdminPage() {
                 value={navForm.order}
                 onChange={(event) => setNavForm((prev) => ({ ...prev, order: event.target.value }))}
               />
+              <select
+                value={navForm.parentId}
+                onChange={(event) => setNavForm((prev) => ({ ...prev, parentId: event.target.value }))}
+              >
+                <option value="">No parent (top level)</option>
+                {navigationLinks
+                  .filter((link) => link.location === navForm.location && !link.parentId)
+                  .map((link) => (
+                    <option key={`parent-${link.id}`} value={link.id}>
+                      Parent: {link.label}
+                    </option>
+                  ))}
+              </select>
               <label>
                 <input
                   type="checkbox"
@@ -1069,6 +1479,7 @@ export default function AdminPage() {
                         href: "",
                         location: "header",
                         order: "1",
+                        parentId: "",
                         enabled: true,
                         openInNewTab: false
                       });
@@ -1086,7 +1497,7 @@ export default function AdminPage() {
                   <div className="notice" key={item.id}>
                     <strong>{item.label}</strong>
                     <p className="muted">
-                      {item.location} | {item.href} | order {item.order} | {item.enabled ? "enabled" : "disabled"}
+                      {item.location} | {item.href} | order {item.order} | parent {item.parentId || "none"} | {item.enabled ? "enabled" : "disabled"}
                     </p>
                     <div className="form-actions">
                       <button
@@ -1099,6 +1510,7 @@ export default function AdminPage() {
                             href: item.href,
                             location: item.location,
                             order: String(item.order),
+                            parentId: item.parentId ?? "",
                             enabled: item.enabled,
                             openInNewTab: item.openInNewTab
                           });
@@ -1256,6 +1668,420 @@ export default function AdminPage() {
               ))}
             </div>
           </section>
+          <section className="admin-section admin-card">
+            <h3>Webinar Management</h3>
+            <p className="muted">Create webinars, generate shortcode automatically, and track registrations.</p>
+            <form className="form-grid" onSubmit={handleWebinarSubmit}>
+              <input
+                placeholder="Webinar title"
+                value={webinarForm.title}
+                onChange={(event) => setWebinarForm((prev) => ({ ...prev, title: event.target.value }))}
+                required
+              />
+              <input
+                placeholder="Webinar slug"
+                value={webinarForm.slug}
+                onChange={(event) => setWebinarForm((prev) => ({ ...prev, slug: event.target.value }))}
+                required
+              />
+              <textarea
+                rows={2}
+                placeholder="Webinar description"
+                value={webinarForm.description}
+                onChange={(event) => setWebinarForm((prev) => ({ ...prev, description: event.target.value }))}
+                required
+              />
+              <input
+                placeholder="Banner image URL"
+                value={webinarForm.bannerImage}
+                onChange={(event) => setWebinarForm((prev) => ({ ...prev, bannerImage: event.target.value }))}
+              />
+              <input type="file" accept="image/*" onChange={handleWebinarBannerUpload} />
+              <input
+                type="datetime-local"
+                value={webinarForm.startAt}
+                onChange={(event) => setWebinarForm((prev) => ({ ...prev, startAt: event.target.value }))}
+                required
+              />
+              <input
+                type="datetime-local"
+                value={webinarForm.endAt}
+                onChange={(event) => setWebinarForm((prev) => ({ ...prev, endAt: event.target.value }))}
+                required
+              />
+              <input
+                placeholder="Meeting URL"
+                value={webinarForm.meetingUrl}
+                onChange={(event) => setWebinarForm((prev) => ({ ...prev, meetingUrl: event.target.value }))}
+                required
+              />
+              <label>
+                <input
+                  type="checkbox"
+                  checked={webinarForm.isPublished}
+                  onChange={(event) => setWebinarForm((prev) => ({ ...prev, isPublished: event.target.checked }))}
+                />
+                Published
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={webinarForm.showOnHome}
+                  onChange={(event) => setWebinarForm((prev) => ({ ...prev, showOnHome: event.target.checked }))}
+                />
+                Show on home page
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={webinarForm.showPublicPage}
+                  onChange={(event) => setWebinarForm((prev) => ({ ...prev, showPublicPage: event.target.checked }))}
+                />
+                Show on webinar listing page
+              </label>
+              <div className="form-actions">
+                <button className="btn btn-primary" type="submit">
+                  {webinarEditingId ? "Update Webinar" : "Create Webinar"}
+                </button>
+                {webinarEditingId ? (
+                  <button
+                    className="btn btn-outline"
+                    type="button"
+                    onClick={() => {
+                      setWebinarEditingId("");
+                      setWebinarForm(emptyWebinarForm);
+                    }}
+                  >
+                    Cancel Edit
+                  </button>
+                ) : null}
+              </div>
+            </form>
+
+            <div className="table-like">
+              {webinars.length ? (
+                webinars.map((item) => (
+                  <article className="notice" key={`admin-webinar-${item.id}`}>
+                    <strong>{item.title}</strong>
+                    <p className="muted">
+                      /webinars/{item.slug} | registrations {registrationsByWebinar[item.id] ?? 0}
+                    </p>
+                    <p className="muted">Shortcode: {item.shortcode}</p>
+                    <div className="form-actions">
+                      <button
+                        className="btn btn-outline"
+                        type="button"
+                        onClick={() => {
+                          const startInput = Number.isNaN(new Date(item.startAt).getTime())
+                            ? ""
+                            : new Date(item.startAt).toISOString().slice(0, 16);
+                          const endInput = Number.isNaN(new Date(item.endAt).getTime())
+                            ? ""
+                            : new Date(item.endAt).toISOString().slice(0, 16);
+
+                          setWebinarEditingId(item.id);
+                          setWebinarForm({
+                            title: item.title,
+                            slug: item.slug,
+                            description: item.description,
+                            bannerImage: item.bannerImage,
+                            startAt: startInput,
+                            endAt: endInput,
+                            meetingUrl: item.meetingUrl,
+                            isPublished: item.isPublished,
+                            showOnHome: item.showOnHome,
+                            showPublicPage: item.showPublicPage
+                          });
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="btn btn-outline"
+                        type="button"
+                        onClick={() => void deleteWebinar(item.id).then(refreshAll)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </article>
+                ))
+              ) : (
+                <p className="muted">No webinars created yet.</p>
+              )}
+            </div>
+          </section>
+
+          <section className="admin-section admin-card">
+            <h3>Course and Certification Management</h3>
+            <p className="muted">
+              Lessons format: <code>Lesson title::Lesson content</code> per line. Questions format:
+              <code>Question||Option A|Option B|Option C||0</code> per line.
+            </p>
+            <form className="form-grid" onSubmit={handleCourseSubmit}>
+              <input
+                placeholder="Course title"
+                value={courseForm.title}
+                onChange={(event) => setCourseForm((prev) => ({ ...prev, title: event.target.value }))}
+                required
+              />
+              <input
+                placeholder="Course slug"
+                value={courseForm.slug}
+                onChange={(event) => setCourseForm((prev) => ({ ...prev, slug: event.target.value }))}
+                required
+              />
+              <textarea
+                rows={2}
+                placeholder="Course description"
+                value={courseForm.description}
+                onChange={(event) => setCourseForm((prev) => ({ ...prev, description: event.target.value }))}
+                required
+              />
+              <input
+                placeholder="Course cover image URL"
+                value={courseForm.coverImage}
+                onChange={(event) => setCourseForm((prev) => ({ ...prev, coverImage: event.target.value }))}
+              />
+              <input type="file" accept="image/*" onChange={handleCourseCoverUpload} />
+              <select
+                value={courseForm.templateId}
+                onChange={(event) => setCourseForm((prev) => ({ ...prev, templateId: event.target.value }))}
+              >
+                <option value="">Select certificate template</option>
+                {certificateTemplates.map((item) => (
+                  <option key={`course-template-${item.id}`} value={item.id}>
+                    {item.name} {item.enabled ? "(enabled)" : ""}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="number"
+                min={1}
+                max={100}
+                placeholder="Passing score"
+                value={courseForm.passingScore}
+                onChange={(event) => setCourseForm((prev) => ({ ...prev, passingScore: event.target.value }))}
+              />
+              <textarea
+                rows={5}
+                placeholder="Lesson 1 title::Lesson 1 content"
+                value={courseForm.lessonsInput}
+                onChange={(event) => setCourseForm((prev) => ({ ...prev, lessonsInput: event.target.value }))}
+                required
+              />
+              <textarea
+                rows={5}
+                placeholder="Question||Option A|Option B||0"
+                value={courseForm.questionsInput}
+                onChange={(event) => setCourseForm((prev) => ({ ...prev, questionsInput: event.target.value }))}
+                required
+              />
+              <label>
+                <input
+                  type="checkbox"
+                  checked={courseForm.isPublished}
+                  onChange={(event) => setCourseForm((prev) => ({ ...prev, isPublished: event.target.checked }))}
+                />
+                Published
+              </label>
+              <div className="form-actions">
+                <button className="btn btn-primary" type="submit">
+                  {courseEditingId ? "Update Course" : "Create Course"}
+                </button>
+                {courseEditingId ? (
+                  <button
+                    className="btn btn-outline"
+                    type="button"
+                    onClick={() => {
+                      setCourseEditingId("");
+                      setCourseForm((prev) => ({
+                        ...emptyCourseForm,
+                        templateId: prev.templateId
+                      }));
+                    }}
+                  >
+                    Cancel Edit
+                  </button>
+                ) : null}
+              </div>
+            </form>
+
+            <div className="table-like">
+              {coursesData.length ? (
+                coursesData.map((item) => (
+                  <article className="notice" key={`admin-course-${item.id}`}>
+                    <strong>{item.title}</strong>
+                    <p className="muted">
+                      /courses/{item.slug} | lessons {item.lessons.length} | questions {item.questions.length} | pass {item.passingScore}%
+                    </p>
+                    <p className="muted">Template: {templateNameById[item.templateId ?? ""] ?? "none"}</p>
+                    <div className="form-actions">
+                      <button
+                        className="btn btn-outline"
+                        type="button"
+                        onClick={() => {
+                          setCourseEditingId(item.id);
+                          setCourseForm({
+                            title: item.title,
+                            slug: item.slug,
+                            description: item.description,
+                            coverImage: item.coverImage,
+                            templateId: item.templateId ?? "",
+                            passingScore: String(item.passingScore),
+                            lessonsInput: lessonsToInput(item.lessons),
+                            questionsInput: questionsToInput(item.questions),
+                            isPublished: item.isPublished
+                          });
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="btn btn-outline"
+                        type="button"
+                        onClick={() => void deleteCourse(item.id).then(refreshAll)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </article>
+                ))
+              ) : (
+                <p className="muted">No courses created yet.</p>
+              )}
+            </div>
+          </section>
+
+          <section className="admin-section admin-card">
+            <h3>Certificate Templates and Signature</h3>
+            <form className="form-grid" onSubmit={handleTemplateSubmit}>
+              <input
+                placeholder="Template name"
+                value={templateForm.name}
+                onChange={(event) => setTemplateForm((prev) => ({ ...prev, name: event.target.value }))}
+                required
+              />
+              <input
+                placeholder="Background image URL"
+                value={templateForm.backgroundImage}
+                onChange={(event) => setTemplateForm((prev) => ({ ...prev, backgroundImage: event.target.value }))}
+              />
+              <input type="file" accept="image/*" onChange={handleTemplateBackgroundUpload} />
+              <input
+                placeholder="Signature image URL"
+                value={templateForm.signatureImage}
+                onChange={(event) => setTemplateForm((prev) => ({ ...prev, signatureImage: event.target.value }))}
+              />
+              <input type="file" accept="image/*" onChange={handleTemplateSignatureUpload} />
+              <label>
+                <input
+                  type="checkbox"
+                  checked={templateForm.enabled}
+                  onChange={(event) => setTemplateForm((prev) => ({ ...prev, enabled: event.target.checked }))}
+                />
+                Enabled
+              </label>
+              <div className="form-actions">
+                <button className="btn btn-primary" type="submit">
+                  {templateEditingId ? "Update Template" : "Create Template"}
+                </button>
+                {templateEditingId ? (
+                  <button
+                    className="btn btn-outline"
+                    type="button"
+                    onClick={() => {
+                      setTemplateEditingId("");
+                      setTemplateForm(emptyTemplateForm);
+                    }}
+                  >
+                    Cancel Edit
+                  </button>
+                ) : null}
+              </div>
+            </form>
+
+            <div className="table-like">
+              {certificateTemplates.length ? (
+                certificateTemplates.map((item) => (
+                  <article className="notice" key={`admin-template-${item.id}`}>
+                    <strong>{item.name}</strong>
+                    <p className="muted">{item.enabled ? "Enabled" : "Disabled"}</p>
+                    <p className="muted">Background: {item.backgroundImage || "not set"}</p>
+                    <p className="muted">Signature: {item.signatureImage || "not set"}</p>
+                    <div className="form-actions">
+                      <button
+                        className="btn btn-outline"
+                        type="button"
+                        onClick={() => {
+                          setTemplateEditingId(item.id);
+                          setTemplateForm({
+                            name: item.name,
+                            backgroundImage: item.backgroundImage,
+                            signatureImage: item.signatureImage,
+                            enabled: item.enabled
+                          });
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="btn btn-outline"
+                        type="button"
+                        onClick={() => void deleteCertificateTemplate(item.id).then(refreshAll)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </article>
+                ))
+              ) : (
+                <p className="muted">No certificate templates created yet.</p>
+              )}
+            </div>
+          </section>
+
+          <section className="admin-section admin-card">
+            <h3>Webinar, Course Progress and Certificate Analytics</h3>
+            <div className="table-like">
+              <div className="notice">
+                <strong>Webinar Registrations ({webinarRegistrations.length})</strong>
+                {webinarRegistrations.length ? (
+                  webinarRegistrations.slice(0, 40).map((item) => (
+                    <p className="muted" key={`webinar-registration-${item.id}`}>
+                      {webinars.find((webinar) => webinar.id === item.webinarId)?.title ?? item.webinarId} - {item.userEmail}
+                    </p>
+                  ))
+                ) : (
+                  <p className="muted">No webinar registrations yet.</p>
+                )}
+              </div>
+              <div className="notice">
+                <strong>Course Progress ({courseProgress.length})</strong>
+                {courseProgress.length ? (
+                  courseProgress.slice(0, 50).map((item) => (
+                    <p className="muted" key={`course-progress-${item.id}`}>
+                      {courseTitleById[item.courseId] ?? item.courseId} - {item.userEmail} - lessons {item.completedLessonIds.length} - score {item.score}% - {item.testPassed ? "passed" : "in progress"}
+                    </p>
+                  ))
+                ) : (
+                  <p className="muted">No course progress records yet.</p>
+                )}
+              </div>
+              <div className="notice">
+                <strong>Issued Certificates ({certificates.length})</strong>
+                {certificates.length ? (
+                  certificates.slice(0, 50).map((item) => (
+                    <p className="muted" key={`certificate-${item.id}`}>
+                      {courseTitleById[item.courseId] ?? item.courseId} - {item.userEmail} - {item.certificateNumber} - template {templateNameById[item.templateId] ?? "none"}
+                    </p>
+                  ))
+                ) : (
+                  <p className="muted">No certificates issued yet.</p>
+                )}
+              </div>
+            </div>
+          </section>
 
           <section className="admin-section admin-card">
             <h3>Category-wise and Post-wise Links</h3>
@@ -1394,6 +2220,22 @@ export default function AdminPage() {
           </section>
 
           <section className="admin-section admin-card">
+            <h3>Post-wise Analytics</h3>
+            <div className="table-like">
+              {postAnalytics.length ? (
+                postAnalytics.map((item) => (
+                  <article className="notice" key={`post-analytics-${item.postId}`}>
+                    <strong>{item.title}</strong>
+                    <p className="muted">Views: {item.views} | Downloads: {item.downloads} | Shares: {item.shares}</p>
+                  </article>
+                ))
+              ) : (
+                <p className="muted">No post analytics yet.</p>
+              )}
+            </div>
+          </section>
+
+          <section className="admin-section admin-card">
             <h3>Post-wise Feedback</h3>
             <div className="table-like">
               {feedback.length ? (
@@ -1416,6 +2258,41 @@ export default function AdminPage() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

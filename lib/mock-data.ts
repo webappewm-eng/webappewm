@@ -1,12 +1,15 @@
-import {
+﻿import {
   Category,
+  CertificateTemplate,
+  Course,
   CustomPage,
   HeroMediaItem,
   NavigationLink,
   Post,
   SiteSettings,
   Subtopic,
-  ThirdPartyScript
+  ThirdPartyScript,
+  Webinar
 } from "@/lib/types";
 
 export const mockCategories: Category[] = [
@@ -45,15 +48,8 @@ const resistorContent = [
   "A resistor is a fundamental component that controls the flow of electric current. In practical circuits, it protects sensitive parts by limiting current to safe values.",
   "Whenever you add an LED to a battery, the resistor is the safety guard. Without it, current rises too quickly and can permanently damage the LED.",
   "The core formula is Ohm's Law: I = V / R. If voltage increases and resistance stays constant, current increases. If resistance increases at fixed voltage, current decreases.",
-  "In real projects, we choose resistor value based on supply voltage, component limits, and desired behavior. For example, in an LED circuit we calculate the resistor from the voltage drop and target current.",
-  "Temperature, tolerance, and power rating also matter. A 220 Ohm resistor with 5% tolerance might behave closer to 209 Ohm or 231 Ohm in reality.",
-  "Resistor power is calculated by P = I^2 * R or P = V * I. Pick a resistor with headroom so it does not overheat in continuous operation.",
-  "Common values come from E-series charts (E6, E12, E24). These standard ranges make manufacturing practical while covering useful resistance intervals.",
-  "In troubleshooting, measuring voltage across and current through resistors helps isolate short circuits, open lines, and wrong component placements.",
-  "In digital electronics, pull-up and pull-down resistors define stable logic states. They prevent floating inputs and random switching behavior.",
-  "In analog circuits, resistor networks shape gain, filtering, and biasing. Their placement directly impacts noise and signal stability.",
-  "When working with sensors, resistive dividers are often used to scale voltages into safe ADC ranges for microcontrollers.",
-  "For beginners, mastering resistors creates intuition for nearly every future electronics topic."
+  "In real projects, we choose resistor value based on supply voltage, component limits, and desired behavior.",
+  "Mastering resistors creates intuition for nearly every future electronics topic."
 ].join("\n\n");
 
 export const mockPosts: Post[] = [
@@ -83,7 +79,7 @@ float calcResistor(float vSupply, float vLed, float iLed) {
     title: "LED Circuit Essentials",
     slug: "led-circuit-essentials",
     excerpt: "Choose the right resistor and supply for stable LED operation.",
-    content: "LEDs are current-driven devices and always need a limiter in standard circuits. Combine practical resistor sizing with safe power checks for reliable performance.",
+    content: "LEDs are current-driven devices and always need a limiter in standard circuits.",
     coverImage: "https://images.unsplash.com/photo-1517420879524-86d64ac2f339?auto=format&fit=crop&w=1200&q=80",
     tags: ["electronics", "led"],
     isPublished: true,
@@ -162,6 +158,66 @@ export const mockHeroMedia: HeroMediaItem[] = [
   }
 ];
 
+export const mockWebinars: Webinar[] = [
+  {
+    id: "webinar-ohm-live",
+    title: "Live Ohm's Law Workshop",
+    slug: "live-ohms-law-workshop",
+    description: "Hands-on resistor calculations and circuit troubleshooting.",
+    bannerImage: "https://images.unsplash.com/photo-1518773553398-650c184e0bb3?auto=format&fit=crop&w=1400&q=80",
+    startAt: "2026-04-10T15:00:00.000Z",
+    endAt: "2026-04-10T16:30:00.000Z",
+    meetingUrl: "https://meet.google.com/",
+    shortcode: "[webinar:live-ohms-law-workshop]",
+    isPublished: true,
+    showOnHome: true,
+    showPublicPage: true,
+    updatedAt: "2026-03-29"
+  }
+];
+
+export const mockCourses: Course[] = [
+  {
+    id: "course-electronics-starter",
+    title: "Electronics Starter Certification",
+    slug: "electronics-starter-certification",
+    description: "Start from basics and complete quiz to unlock certificate.",
+    coverImage: "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1400&q=80",
+    templateId: "template-classic",
+    lessons: [
+      { id: "lesson-1", title: "Current and Voltage", content: "Understand electrical flow.", order: 1 },
+      { id: "lesson-2", title: "Resistors", content: "Learn resistor usage and calculations.", order: 2 },
+      { id: "lesson-3", title: "Series and Parallel", content: "Analyze circuit combinations.", order: 3 }
+    ],
+    passingScore: 70,
+    questions: [
+      {
+        question: "Which formula represents Ohm's law?",
+        options: ["I = V / R", "P = V * I", "R = I * V", "V = I / R"],
+        correctOptionIndex: 0
+      },
+      {
+        question: "In series circuits, current is:",
+        options: ["Same through all components", "Different in each branch", "Always zero", "Infinite"],
+        correctOptionIndex: 0
+      }
+    ],
+    isPublished: true,
+    updatedAt: "2026-03-29"
+  }
+];
+
+export const mockCertificateTemplates: CertificateTemplate[] = [
+  {
+    id: "template-classic",
+    name: "Classic Certificate",
+    backgroundImage: "",
+    signatureImage: "",
+    enabled: true,
+    updatedAt: "2026-03-29"
+  }
+];
+
 export const mockThirdPartyScripts: ThirdPartyScript[] = [];
 
 export const mockNavigationLinks: NavigationLink[] = [
@@ -231,6 +287,7 @@ export const mockSiteSettings: SiteSettings = {
   id: "global",
   liveTrackingEnabled: true,
   themeMode: "light",
+  layoutSideGap: 32,
   logoMode: "text",
   logoImageUrl: "",
   logoSize: 38,
@@ -251,4 +308,8 @@ export const mockSiteSettings: SiteSettings = {
   notFoundButtonLabel: "Go to Home",
   updatedAt: "2026-03-28"
 };
+
+
+
+
 

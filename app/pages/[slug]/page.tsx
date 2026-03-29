@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Footer } from "@/components/layout/Footer";
@@ -47,7 +47,7 @@ export default async function CustomPageRoute({ params }: PageProps) {
 
   return (
     <div className="app-shell">
-      <Header onOpenLogin={() => undefined} />
+      <Header />
       <main className="page-main">
         <div className="page-wrap">
           <p className="breadcrumb">
@@ -68,3 +68,4 @@ export default async function CustomPageRoute({ params }: PageProps) {
     </div>
   );
 }
+

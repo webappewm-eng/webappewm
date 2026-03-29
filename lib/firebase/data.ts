@@ -1,4 +1,4 @@
-import {
+﻿import {
   addDoc,
   collection,
   deleteDoc,
@@ -22,7 +22,10 @@ import {
   mockSubtopics,
   mockThirdPartyScripts,
   mockNavigationLinks,
-  mockHeroMedia
+  mockHeroMedia,
+  mockWebinars,
+  mockCourses,
+  mockCertificateTemplates
 } from "@/lib/mock-data";
 import {
   AnalyticsEvent,
@@ -35,10 +38,17 @@ import {
   NavigationLink,
   NotificationMessage,
   Post,
+  PostAnalyticsBreakdown,
   SiteSettings,
   Subscription,
   Subtopic,
-  ThirdPartyScript
+  ThirdPartyScript,
+  Webinar,
+  WebinarRegistration,
+  Course,
+  UserCourseProgress,
+  CertificateTemplate,
+  UserCertificate
 } from "@/lib/types";
 
 const localStore = {
@@ -54,7 +64,13 @@ const localStore = {
   analyticsEvents: [] as AnalyticsEvent[],
   livePresence: [] as LivePresence[],
   siteSettings: { ...mockSiteSettings },
-  heroMedia: [...mockHeroMedia]
+  heroMedia: [...mockHeroMedia],
+  webinars: [...mockWebinars],
+  webinarRegistrations: [] as WebinarRegistration[],
+  courses: [...mockCourses],
+  courseProgress: [] as UserCourseProgress[],
+  certificateTemplates: [...mockCertificateTemplates],
+  certificates: [] as UserCertificate[]
 };
 
 function sortByOrder<T extends { order?: number }>(items: T[]): T[] {
@@ -124,11 +140,13 @@ function normalizeSiteSettings(raw: Partial<SiteSettings> | Record<string, unkno
   const previewPercent = clampNumber(Number(raw.contentPreviewPercent ?? 20) || 20, 5, 95);
   const logoSize = clampNumber(Number(raw.logoSize ?? 38) || 38, 26, 80);
   const siteUrl = String(raw.siteUrl ?? "https://webappewm.vercel.app").trim();
+  const layoutSideGap = clampNumber(Number(raw.layoutSideGap ?? 32) || 32, 8, 96);
 
   return {
     id: String(raw.id ?? "global"),
     liveTrackingEnabled: raw.liveTrackingEnabled !== false,
     themeMode: raw.themeMode === "dark" ? "dark" : "light",
+    layoutSideGap,
     logoMode: raw.logoMode === "image" ? "image" : "text",
     logoImageUrl: String(raw.logoImageUrl ?? "").trim(),
     logoSize,
@@ -234,7 +252,6 @@ export async function getPosts(filters?: {
     return mapRows(rows);
   }
 }
-
 export async function getPostBySlug(slug: string): Promise<Post | null> {
   const normalizedSlug = slug.trim().toLowerCase();
 
@@ -265,7 +282,18 @@ export async function getPostBySlug(slug: string): Promise<Post | null> {
       ) ?? null
     );
   } catch {
-    return null;
+    const allPublished = await getPosts();
+    return (
+      allPublished.find((item) => {
+        const lowerSlug = item.slug.toLowerCase();
+        return (
+          lowerSlug === normalizedSlug ||
+          item.id.toLowerCase() === normalizedSlug ||
+          lowerSlug.startsWith(`${normalizedSlug}-`) ||
+          lowerSlug.includes(normalizedSlug)
+        );
+      }) ?? null
+    );
   }
 }
 
@@ -353,7 +381,6 @@ export async function getFeedback(postId?: string): Promise<Feedback[]> {
     };
   });
 }
-
 export async function createCategory(input: Omit<Category, "id">): Promise<void> {
   if (!hasFirebaseConfig || !db) {
     localStore.categories.push({ id: `cat-${Date.now()}`, ...input });
@@ -469,7 +496,6 @@ export async function getCustomPages(includeDrafts = false): Promise<CustomPage[
     };
   });
 }
-
 export async function getCustomPageBySlug(slug: string): Promise<CustomPage | null> {
   if (!hasFirebaseConfig || !db) {
     return localStore.customPages.find((item) => item.slug === slug && item.isPublished) ?? null;
@@ -610,6 +636,7 @@ export async function getNavigationLinks(location?: NavigationLink["location"]):
     order: Number(data.order ?? 0),
     enabled: data.enabled !== false,
     openInNewTab: Boolean(data.openInNewTab),
+    parentId: String(data.parentId ?? "").trim(),
     updatedAt: normalizeDate(data.updatedAt)
   });
 
@@ -639,6 +666,7 @@ export async function getNavigationLinksForAdmin(): Promise<NavigationLink[]> {
         order: Number(data.order ?? 0),
         enabled: data.enabled !== false,
         openInNewTab: Boolean(data.openInNewTab),
+        parentId: sanitizeString(data.parentId),
         updatedAt: normalizeDate(data.updatedAt)
       };
     });
@@ -654,6 +682,7 @@ export async function getNavigationLinksForAdmin(): Promise<NavigationLink[]> {
         order: Number(data.order ?? 0),
         enabled: data.enabled !== false,
         openInNewTab: Boolean(data.openInNewTab),
+        parentId: sanitizeString(data.parentId),
         updatedAt: normalizeDate(data.updatedAt)
       } as NavigationLink;
     });
@@ -968,6 +997,7 @@ export async function updateNotFoundSettings(input: {
 
 export async function updateSiteAppearanceSettings(input: {
   themeMode: SiteSettings["themeMode"];
+  layoutSideGap: number;
   logoMode: SiteSettings["logoMode"];
   logoImageUrl: string;
   logoSize: number;
@@ -999,6 +1029,7 @@ export async function updateSiteAppearanceSettings(input: {
     doc(db, "site_settings", "global"),
     {
       themeMode: normalized.themeMode,
+      layoutSideGap: normalized.layoutSideGap,
       logoMode: normalized.logoMode,
       logoImageUrl: normalized.logoImageUrl,
       logoSize: normalized.logoSize,
@@ -1031,6 +1062,7 @@ export async function getAnalyticsSummary(): Promise<AnalyticsSummary> {
       activeUsers,
       views: localStore.analyticsEvents.filter((item) => item.type === "post_view").length,
       downloads: localStore.analyticsEvents.filter((item) => item.type === "pdf_download").length,
+      shares: localStore.analyticsEvents.filter((item) => item.type === "post_share").length,
       feedbackCount: localStore.feedback.length
     };
   }
@@ -1054,6 +1086,7 @@ export async function getAnalyticsSummary(): Promise<AnalyticsSummary> {
 
   let views = 0;
   let downloads = 0;
+  let shares = 0;
 
   eventsSnap.docs.forEach((item) => {
     const data = item.data() as Record<string, unknown>;
@@ -1064,12 +1097,16 @@ export async function getAnalyticsSummary(): Promise<AnalyticsSummary> {
     if (type === "pdf_download") {
       downloads += 1;
     }
+    if (type === "post_share") {
+      shares += 1;
+    }
   });
 
   return {
     activeUsers,
     views,
     downloads,
+    shares,
     feedbackCount: feedbackSnap.size
   };
 }
@@ -1091,6 +1128,585 @@ export async function upsertAdminProfile(uid: string, email: string): Promise<vo
 }
 
 
+
+
+
+
+
+
+
+
+
+
+
+function normalizeShortcodeFromSlug(slug: string): string {
+  const clean = slug.trim().toLowerCase();
+  return `[webinar:${clean}]`;
+}
+
+function sanitizeString(value: unknown): string {
+  return String(value ?? "").trim();
+}
+
+function mapWebinarDoc(data: Record<string, unknown>, id: string): Webinar {
+  const slug = sanitizeString(data.slug);
+  return {
+    id,
+    title: sanitizeString(data.title),
+    slug,
+    description: sanitizeString(data.description),
+    bannerImage: sanitizeString(data.bannerImage),
+    startAt: normalizeDate(data.startAt),
+    endAt: normalizeDate(data.endAt),
+    meetingUrl: sanitizeString(data.meetingUrl),
+    shortcode: sanitizeString(data.shortcode) || normalizeShortcodeFromSlug(slug),
+    isPublished: Boolean(data.isPublished),
+    showOnHome: data.showOnHome !== false,
+    showPublicPage: data.showPublicPage !== false,
+    updatedAt: normalizeDate(data.updatedAt)
+  };
+}
+
+function mapCourseDoc(data: Record<string, unknown>, id: string): Course {
+  return {
+    id,
+    title: sanitizeString(data.title),
+    slug: sanitizeString(data.slug),
+    description: sanitizeString(data.description),
+    coverImage: sanitizeString(data.coverImage),
+    templateId: sanitizeString(data.templateId),
+    lessons: Array.isArray(data.lessons) ? (data.lessons as Course["lessons"]) : [],
+    passingScore: Number(data.passingScore ?? 70),
+    questions: Array.isArray(data.questions) ? (data.questions as Course["questions"]) : [],
+    isPublished: Boolean(data.isPublished),
+    updatedAt: normalizeDate(data.updatedAt)
+  };
+}
+
+function mapTemplateDoc(data: Record<string, unknown>, id: string): CertificateTemplate {
+  return {
+    id,
+    name: sanitizeString(data.name),
+    backgroundImage: sanitizeString(data.backgroundImage),
+    signatureImage: sanitizeString(data.signatureImage),
+    enabled: data.enabled !== false,
+    updatedAt: normalizeDate(data.updatedAt)
+  };
+}
+
+export async function getPostAnalyticsBreakdown(): Promise<PostAnalyticsBreakdown[]> {
+  const posts = await getPosts({ includeDrafts: true });
+  const byPost: Record<string, PostAnalyticsBreakdown> = {};
+
+  posts.forEach((post) => {
+    byPost[post.id] = {
+      postId: post.id,
+      title: post.title,
+      views: 0,
+      downloads: 0,
+      shares: 0
+    };
+  });
+
+  if (!hasFirebaseConfig || !db) {
+    localStore.analyticsEvents.forEach((event) => {
+      if (!event.postId) {
+        return;
+      }
+      if (!byPost[event.postId]) {
+        byPost[event.postId] = {
+          postId: event.postId,
+          title: event.postId,
+          views: 0,
+          downloads: 0,
+          shares: 0
+        };
+      }
+      if (event.type === "post_view") byPost[event.postId].views += 1;
+      if (event.type === "pdf_download") byPost[event.postId].downloads += 1;
+      if (event.type === "post_share") byPost[event.postId].shares += 1;
+    });
+
+    return Object.values(byPost).sort((a, b) => b.views + b.downloads + b.shares - (a.views + a.downloads + a.shares));
+  }
+
+  const eventsSnap = await getDocs(collection(db, "analytics_events"));
+  eventsSnap.docs.forEach((item) => {
+    const data = item.data() as Record<string, unknown>;
+    const postId = sanitizeString(data.postId);
+    if (!postId) {
+      return;
+    }
+
+    if (!byPost[postId]) {
+      byPost[postId] = {
+        postId,
+        title: postId,
+        views: 0,
+        downloads: 0,
+        shares: 0
+      };
+    }
+
+    const type = sanitizeString(data.type);
+    if (type === "post_view") byPost[postId].views += 1;
+    if (type === "pdf_download") byPost[postId].downloads += 1;
+    if (type === "post_share") byPost[postId].shares += 1;
+  });
+
+  return Object.values(byPost).sort((a, b) => b.views + b.downloads + b.shares - (a.views + a.downloads + a.shares));
+}
+
+export async function getWebinars(includeDrafts = false): Promise<Webinar[]> {
+  const filterRows = (rows: Webinar[]) => {
+    const filtered = includeDrafts ? rows : rows.filter((item) => item.isPublished);
+    return sortByDateDesc(filtered);
+  };
+
+  if (!hasFirebaseConfig || !db) {
+    return filterRows(localStore.webinars);
+  }
+
+  const snap = await getDocs(collection(db, "webinars"));
+  const rows = snap.docs.map((item) => mapWebinarDoc(item.data() as Record<string, unknown>, item.id));
+  return filterRows(rows);
+}
+
+export async function getWebinarBySlug(slug: string): Promise<Webinar | null> {
+  const normalized = slug.trim().toLowerCase();
+  const webinars = await getWebinars(true);
+  return webinars.find((item) => item.slug.toLowerCase() === normalized && item.isPublished) ?? null;
+}
+
+export async function createWebinar(input: Omit<Webinar, "id" | "updatedAt" | "shortcode">): Promise<void> {
+  const payload = {
+    ...input,
+    shortcode: normalizeShortcodeFromSlug(input.slug),
+    updatedAt: new Date().toISOString()
+  };
+
+  if (!hasFirebaseConfig || !db) {
+    localStore.webinars.unshift({ id: `webinar-${Date.now()}`, ...payload });
+    return;
+  }
+
+  await addDoc(collection(db, "webinars"), {
+    ...payload,
+    updatedAt: serverTimestamp()
+  });
+}
+
+export async function updateWebinar(
+  id: string,
+  input: Partial<Omit<Webinar, "id" | "updatedAt" | "shortcode">>
+): Promise<void> {
+  const nextSlug = sanitizeString(input.slug);
+  const payload = {
+    ...input,
+    ...(nextSlug ? { shortcode: normalizeShortcodeFromSlug(nextSlug) } : {}),
+    updatedAt: new Date().toISOString()
+  };
+
+  if (!hasFirebaseConfig || !db) {
+    localStore.webinars = localStore.webinars.map((item) => (item.id === id ? { ...item, ...payload } : item));
+    return;
+  }
+
+  await updateDoc(doc(db, "webinars", id), {
+    ...payload,
+    updatedAt: serverTimestamp()
+  });
+}
+
+export async function deleteWebinar(id: string): Promise<void> {
+  if (!hasFirebaseConfig || !db) {
+    localStore.webinars = localStore.webinars.filter((item) => item.id !== id);
+    localStore.webinarRegistrations = localStore.webinarRegistrations.filter((item) => item.webinarId !== id);
+    return;
+  }
+
+  await deleteDoc(doc(db, "webinars", id));
+}
+
+export async function registerWebinar(input: {
+  webinarId: string;
+  userId: string;
+  userEmail: string;
+  userName: string;
+}): Promise<void> {
+  const payload = {
+    webinarId: input.webinarId,
+    userId: input.userId,
+    userEmail: sanitizeString(input.userEmail),
+    userName: sanitizeString(input.userName),
+    createdAt: new Date().toISOString()
+  };
+
+  if (!hasFirebaseConfig || !db) {
+    const key = `${payload.webinarId}:${payload.userId}`;
+    const existing = localStore.webinarRegistrations.find((item) => `${item.webinarId}:${item.userId}` === key);
+    if (!existing) {
+      localStore.webinarRegistrations.unshift({ id: `wreg-${Date.now()}`, ...payload });
+    }
+    return;
+  }
+
+  const snap = await getDocs(
+    query(collection(db, "webinar_registrations"), where("webinarId", "==", payload.webinarId), where("userId", "==", payload.userId))
+  );
+  if (!snap.empty) {
+    return;
+  }
+
+  await addDoc(collection(db, "webinar_registrations"), {
+    ...payload,
+    createdAt: serverTimestamp()
+  });
+}
+
+export async function getWebinarRegistrations(webinarId?: string): Promise<WebinarRegistration[]> {
+  if (!hasFirebaseConfig || !db) {
+    const rows = webinarId
+      ? localStore.webinarRegistrations.filter((item) => item.webinarId === webinarId)
+      : localStore.webinarRegistrations;
+    return sortByDateDesc(rows);
+  }
+
+  const base = collection(db, "webinar_registrations");
+  const snap = webinarId ? await getDocs(query(base, where("webinarId", "==", webinarId))) : await getDocs(base);
+
+  return sortByDateDesc(
+    snap.docs.map((item) => {
+      const data = item.data() as Record<string, unknown>;
+      return {
+        id: item.id,
+        webinarId: sanitizeString(data.webinarId),
+        userId: sanitizeString(data.userId),
+        userEmail: sanitizeString(data.userEmail),
+        userName: sanitizeString(data.userName),
+        createdAt: normalizeDate(data.createdAt)
+      } as WebinarRegistration;
+    })
+  );
+}
+
+export async function getCourses(includeDrafts = false): Promise<Course[]> {
+  const filterRows = (rows: Course[]) => {
+    const filtered = includeDrafts ? rows : rows.filter((item) => item.isPublished);
+    return sortByDateDesc(filtered);
+  };
+
+  if (!hasFirebaseConfig || !db) {
+    return filterRows(localStore.courses);
+  }
+
+  const snap = await getDocs(collection(db, "courses"));
+  const rows = snap.docs.map((item) => mapCourseDoc(item.data() as Record<string, unknown>, item.id));
+  return filterRows(rows);
+}
+
+export async function getCourseBySlug(slug: string): Promise<Course | null> {
+  const normalized = slug.trim().toLowerCase();
+  const courses = await getCourses(true);
+  return courses.find((item) => item.slug.toLowerCase() === normalized && item.isPublished) ?? null;
+}
+
+export async function createCourse(input: Omit<Course, "id" | "updatedAt">): Promise<void> {
+  const payload = {
+    ...input,
+    updatedAt: new Date().toISOString()
+  };
+
+  if (!hasFirebaseConfig || !db) {
+    localStore.courses.unshift({ id: `course-${Date.now()}`, ...payload });
+    return;
+  }
+
+  await addDoc(collection(db, "courses"), {
+    ...payload,
+    updatedAt: serverTimestamp()
+  });
+}
+
+export async function updateCourse(id: string, input: Partial<Omit<Course, "id" | "updatedAt">>): Promise<void> {
+  if (!hasFirebaseConfig || !db) {
+    localStore.courses = localStore.courses.map((item) =>
+      item.id === id ? { ...item, ...input, updatedAt: new Date().toISOString() } : item
+    );
+    return;
+  }
+
+  await updateDoc(doc(db, "courses", id), {
+    ...input,
+    updatedAt: serverTimestamp()
+  });
+}
+
+export async function deleteCourse(id: string): Promise<void> {
+  if (!hasFirebaseConfig || !db) {
+    localStore.courses = localStore.courses.filter((item) => item.id !== id);
+    localStore.courseProgress = localStore.courseProgress.filter((item) => item.courseId !== id);
+    localStore.certificates = localStore.certificates.filter((item) => item.courseId !== id);
+    return;
+  }
+
+  await deleteDoc(doc(db, "courses", id));
+}
+
+export async function getUserCourseProgress(courseId: string, userId: string): Promise<UserCourseProgress | null> {
+  if (!hasFirebaseConfig || !db) {
+    return localStore.courseProgress.find((item) => item.courseId === courseId && item.userId === userId) ?? null;
+  }
+
+  const snap = await getDocs(
+    query(collection(db, "course_progress"), where("courseId", "==", courseId), where("userId", "==", userId))
+  );
+
+  if (snap.empty) {
+    return null;
+  }
+
+  const item = snap.docs[0];
+  const data = item.data() as Record<string, unknown>;
+  return {
+    id: item.id,
+    courseId: sanitizeString(data.courseId),
+    userId: sanitizeString(data.userId),
+    userEmail: sanitizeString(data.userEmail),
+    completedLessonIds: Array.isArray(data.completedLessonIds) ? (data.completedLessonIds as string[]) : [],
+    testUnlocked: Boolean(data.testUnlocked),
+    testPassed: Boolean(data.testPassed),
+    score: Number(data.score ?? 0),
+    certificateId: sanitizeString(data.certificateId),
+    updatedAt: normalizeDate(data.updatedAt)
+  };
+}
+
+export async function upsertUserCourseProgress(input: {
+  courseId: string;
+  userId: string;
+  userEmail: string;
+  completedLessonIds: string[];
+  testUnlocked: boolean;
+  testPassed: boolean;
+  score: number;
+  certificateId?: string;
+}): Promise<void> {
+  const payload = {
+    ...input,
+    certificateId: input.certificateId ?? "",
+    updatedAt: new Date().toISOString()
+  };
+
+  if (!hasFirebaseConfig || !db) {
+    const existing = localStore.courseProgress.find((item) => item.courseId === input.courseId && item.userId === input.userId);
+    if (existing) {
+      localStore.courseProgress = localStore.courseProgress.map((item) => (item.id === existing.id ? { ...item, ...payload } : item));
+    } else {
+      localStore.courseProgress.unshift({ id: `cprog-${Date.now()}`, ...payload });
+    }
+    return;
+  }
+
+  const snap = await getDocs(
+    query(collection(db, "course_progress"), where("courseId", "==", input.courseId), where("userId", "==", input.userId))
+  );
+
+  if (!snap.empty) {
+    await updateDoc(doc(db, "course_progress", snap.docs[0].id), {
+      ...payload,
+      updatedAt: serverTimestamp()
+    });
+    return;
+  }
+
+  await addDoc(collection(db, "course_progress"), {
+    ...payload,
+    updatedAt: serverTimestamp()
+  });
+}
+
+export async function getCourseProgressForAdmin(courseId?: string): Promise<UserCourseProgress[]> {
+  if (!hasFirebaseConfig || !db) {
+    const rows = courseId ? localStore.courseProgress.filter((item) => item.courseId === courseId) : localStore.courseProgress;
+    return sortByDateDesc(rows);
+  }
+
+  const base = collection(db, "course_progress");
+  const snap = courseId ? await getDocs(query(base, where("courseId", "==", courseId))) : await getDocs(base);
+  return sortByDateDesc(
+    snap.docs.map((item) => {
+      const data = item.data() as Record<string, unknown>;
+      return {
+        id: item.id,
+        courseId: sanitizeString(data.courseId),
+        userId: sanitizeString(data.userId),
+        userEmail: sanitizeString(data.userEmail),
+        completedLessonIds: Array.isArray(data.completedLessonIds) ? (data.completedLessonIds as string[]) : [],
+        testUnlocked: Boolean(data.testUnlocked),
+        testPassed: Boolean(data.testPassed),
+        score: Number(data.score ?? 0),
+        certificateId: sanitizeString(data.certificateId),
+        updatedAt: normalizeDate(data.updatedAt)
+      } as UserCourseProgress;
+    })
+  );
+}
+
+export async function getCertificateTemplates(): Promise<CertificateTemplate[]> {
+  if (!hasFirebaseConfig || !db) {
+    return sortByDateDesc(localStore.certificateTemplates);
+  }
+
+  const snap = await getDocs(collection(db, "certificate_templates"));
+  return sortByDateDesc(snap.docs.map((item) => mapTemplateDoc(item.data() as Record<string, unknown>, item.id)));
+}
+
+export async function createCertificateTemplate(input: Omit<CertificateTemplate, "id" | "updatedAt">): Promise<void> {
+  const payload = {
+    ...input,
+    updatedAt: new Date().toISOString()
+  };
+
+  if (!hasFirebaseConfig || !db) {
+    localStore.certificateTemplates.unshift({ id: `tmpl-${Date.now()}`, ...payload });
+    return;
+  }
+
+  await addDoc(collection(db, "certificate_templates"), {
+    ...payload,
+    updatedAt: serverTimestamp()
+  });
+}
+
+export async function updateCertificateTemplate(
+  id: string,
+  input: Partial<Omit<CertificateTemplate, "id" | "updatedAt">>
+): Promise<void> {
+  if (!hasFirebaseConfig || !db) {
+    localStore.certificateTemplates = localStore.certificateTemplates.map((item) =>
+      item.id === id ? { ...item, ...input, updatedAt: new Date().toISOString() } : item
+    );
+    return;
+  }
+
+  await updateDoc(doc(db, "certificate_templates", id), {
+    ...input,
+    updatedAt: serverTimestamp()
+  });
+}
+
+export async function deleteCertificateTemplate(id: string): Promise<void> {
+  if (!hasFirebaseConfig || !db) {
+    localStore.certificateTemplates = localStore.certificateTemplates.filter((item) => item.id !== id);
+    return;
+  }
+
+  await deleteDoc(doc(db, "certificate_templates", id));
+}
+
+export async function issueCertificate(input: Omit<UserCertificate, "id" | "issuedAt" | "certificateNumber">): Promise<UserCertificate> {
+  const certificate: UserCertificate = {
+    id: `cert-${Date.now()}`,
+    ...input,
+    issuedAt: new Date().toISOString(),
+    certificateNumber: `EWM-${Date.now()}`
+  };
+
+  if (!hasFirebaseConfig || !db) {
+    localStore.certificates.unshift(certificate);
+    return certificate;
+  }
+
+  const ref = await addDoc(collection(db, "certificates"), {
+    ...certificate,
+    issuedAt: serverTimestamp()
+  });
+
+  return { ...certificate, id: ref.id };
+}
+
+export async function getUserCertificates(userId?: string): Promise<UserCertificate[]> {
+  if (!hasFirebaseConfig || !db) {
+    const rows = userId ? localStore.certificates.filter((item) => item.userId === userId) : localStore.certificates;
+    return [...rows].sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
+  }
+
+  const base = collection(db, "certificates");
+  const snap = userId ? await getDocs(query(base, where("userId", "==", userId))) : await getDocs(base);
+  return snap.docs
+    .map((item) => {
+      const data = item.data() as Record<string, unknown>;
+      return {
+        id: item.id,
+        courseId: sanitizeString(data.courseId),
+        userId: sanitizeString(data.userId),
+        userEmail: sanitizeString(data.userEmail),
+        userName: sanitizeString(data.userName),
+        templateId: sanitizeString(data.templateId),
+        issuedAt: normalizeDate(data.issuedAt),
+        certificateNumber: sanitizeString(data.certificateNumber)
+      } as UserCertificate;
+    })
+    .sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
+}
+
+export async function getCertificatesForAdmin(): Promise<UserCertificate[]> {
+  return getUserCertificates();
+}
+
+export async function getUserCourseProgressList(userId: string): Promise<UserCourseProgress[]> {
+  if (!hasFirebaseConfig || !db) {
+    return sortByDateDesc(localStore.courseProgress.filter((item) => item.userId === userId));
+  }
+
+  const snap = await getDocs(query(collection(db, "course_progress"), where("userId", "==", userId)));
+  return sortByDateDesc(
+    snap.docs.map((item) => {
+      const data = item.data() as Record<string, unknown>;
+      return {
+        id: item.id,
+        courseId: sanitizeString(data.courseId),
+        userId: sanitizeString(data.userId),
+        userEmail: sanitizeString(data.userEmail),
+        completedLessonIds: Array.isArray(data.completedLessonIds) ? (data.completedLessonIds as string[]) : [],
+        testUnlocked: Boolean(data.testUnlocked),
+        testPassed: Boolean(data.testPassed),
+        score: Number(data.score ?? 0),
+        certificateId: sanitizeString(data.certificateId),
+        updatedAt: normalizeDate(data.updatedAt)
+      } as UserCourseProgress;
+    })
+  );
+}
+
+export async function getCertificateById(certificateId: string): Promise<UserCertificate | null> {
+  const id = sanitizeString(certificateId);
+  if (!id) {
+    return null;
+  }
+
+  if (!hasFirebaseConfig || !db) {
+    return localStore.certificates.find((item) => item.id === id) ?? null;
+  }
+
+  const snap = await getDoc(doc(db, "certificates", id));
+  if (!snap.exists()) {
+    return null;
+  }
+
+  const data = snap.data() as Record<string, unknown>;
+  return {
+    id: snap.id,
+    courseId: sanitizeString(data.courseId),
+    userId: sanitizeString(data.userId),
+    userEmail: sanitizeString(data.userEmail),
+    userName: sanitizeString(data.userName),
+    templateId: sanitizeString(data.templateId),
+    issuedAt: normalizeDate(data.issuedAt),
+    certificateNumber: sanitizeString(data.certificateNumber)
+  } as UserCertificate;
+}
 
 
 

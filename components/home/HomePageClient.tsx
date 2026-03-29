@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Image from "next/image";
 import Link from "next/link";
@@ -9,8 +9,8 @@ import { LoginModal } from "@/components/auth/LoginModal";
 import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
 import { NotificationStrip } from "@/components/layout/NotificationStrip";
-import { getCategories, getHeroMedia, getPosts, getSiteSettings, getSubtopics } from "@/lib/firebase/data";
-import { Category, HeroMediaItem, Post, Subtopic } from "@/lib/types";
+import { getCategories, getCourses, getHeroMedia, getPosts, getSiteSettings, getSubtopics, getWebinars } from "@/lib/firebase/data";
+import { Category, Course, HeroMediaItem, Post, Subtopic, Webinar } from "@/lib/types";
 
 const fallbackVideoSlides: HeroMediaItem[] = [
   {
@@ -157,16 +157,28 @@ interface HomePageClientProps {
   initialCategories: Category[];
   initialSubtopics: Subtopic[];
   initialPosts: Post[];
+  initialVideoSlides: HeroMediaItem[];
+  initialImageSlides: HeroMediaItem[];
+  initialWebinars: Webinar[];
+  initialCourses: Course[];
+  initialPreviewPercent: number;
   requestedCategory?: string;
   requestedSubtopic?: string;
+  requestedSearch?: string;
 }
 
 export default function HomePageClient({
   initialCategories,
   initialSubtopics,
   initialPosts,
+  initialVideoSlides,
+  initialImageSlides,
+  initialWebinars,
+  initialCourses,
+  initialPreviewPercent,
   requestedCategory = "",
-  requestedSubtopic = ""
+  requestedSubtopic = "",
+  requestedSearch = ""
 }: HomePageClientProps) {
   const normalizedRequestedCategory = requestedCategory.trim().toLowerCase();
   const normalizedRequestedSubtopic = requestedSubtopic.trim().toLowerCase();
@@ -183,14 +195,16 @@ export default function HomePageClient({
   const [categories, setCategories] = useState<Category[]>(initialCategories);
   const [allSubtopics, setAllSubtopics] = useState<Subtopic[]>(initialSubtopics);
   const [posts, setPosts] = useState<Post[]>(initialPosts);
+  const [webinars, setWebinars] = useState<Webinar[]>(initialWebinars.filter((item) => item.showOnHome));
+  const [coursesData, setCoursesData] = useState<Course[]>(initialCourses);
 
   const [selectedCategory, setSelectedCategory] = useState<string>(initialSelectedCategory);
   const [selectedSubtopic, setSelectedSubtopic] = useState<string>("");
-  const [searchText, setSearchText] = useState("");
+  const [searchText, setSearchText] = useState(requestedSearch);
 
-  const [videoSlides, setVideoSlides] = useState<HeroMediaItem[]>(fallbackVideoSlides);
-  const [imageSlides, setImageSlides] = useState<HeroMediaItem[]>(fallbackImageSlides);
-  const [previewPercent, setPreviewPercent] = useState(20);
+  const [videoSlides, setVideoSlides] = useState<HeroMediaItem[]>(initialVideoSlides.length ? initialVideoSlides : fallbackVideoSlides);
+  const [imageSlides, setImageSlides] = useState<HeroMediaItem[]>(initialImageSlides.length ? initialImageSlides : fallbackImageSlides);
+  const [previewPercent, setPreviewPercent] = useState(initialPreviewPercent || 20);
 
   const [videoIndex, setVideoIndex] = useState(0);
   const [imageIndex, setImageIndex] = useState(0);
@@ -209,13 +223,15 @@ export default function HomePageClient({
   useEffect(() => {
     async function refreshFromFirebase() {
       try {
-        const [nextCategories, nextSubtopics, nextPosts, nextVideoSlides, nextImageSlides, siteSettings] = await Promise.all([
+        const [nextCategories, nextSubtopics, nextPosts, nextVideoSlides, nextImageSlides, siteSettings, nextWebinars, nextCourses] = await Promise.all([
           getCategories(),
           getSubtopics(),
           getPosts(),
           getHeroMedia("video"),
           getHeroMedia("image"),
-          getSiteSettings()
+          getSiteSettings(),
+          getWebinars(false),
+          getCourses(false)
         ]);
 
         setCategories(nextCategories);
@@ -224,6 +240,8 @@ export default function HomePageClient({
         setVideoSlides(nextVideoSlides.length ? nextVideoSlides : fallbackVideoSlides);
         setImageSlides(nextImageSlides.length ? nextImageSlides : fallbackImageSlides);
         setPreviewPercent(siteSettings.contentPreviewPercent);
+        setWebinars(nextWebinars.filter((item) => item.showOnHome));
+        setCoursesData(nextCourses);
         setLoadError("");
 
         setSelectedCategory((prev) => {
@@ -540,17 +558,58 @@ export default function HomePageClient({
           </div>
         </section>
 
-        <section className="section">
-          <div className="label">Courses</div>
-          <h2 className="h2">Go deeper with structured tracks</h2>
-          <div className="course-grid">
-            {courses.map((course) => (
-              <article className="course-card" key={course.title}>
-                <h3>{course.title}</h3>
-                <p className="meta">{course.meta}</p>
-                <span className="course-tag">{course.tag}</span>
+        <section className="section section-accent">
+          <div className="label">Webinars</div>
+          <h2 className="h2">Upcoming live webinars</h2>
+          <p className="body-txt">Register for live sessions and track registrations from admin panel.</p>
+          <div className="webinar-grid">
+            {webinars.length ? (
+              webinars.map((webinar) => (
+                <article className="webinar-card" key={webinar.id}>
+                  <h3>{webinar.title}</h3>
+                  <p className="meta">{new Date(webinar.startAt).toLocaleString()}</p>
+                  <p className="muted">{webinar.description}</p>
+                  <Link href={`/webinars/${webinar.slug}`} className="btn btn-outline" style={{ marginTop: "0.8rem" }}>
+                    Register
+                  </Link>
+                </article>
+              ))
+            ) : (
+              <article className="webinar-card">
+                <h3>More webinars coming soon</h3>
+                <p className="muted">Add webinars from admin panel to show here.</p>
+                <Link href="/webinars" className="btn btn-outline" style={{ marginTop: "0.8rem" }}>
+                  Open Webinar Page
+                </Link>
               </article>
-            ))}
+            )}
+          </div>
+        </section>
+
+        <section className="section">
+          <div className="label">Certification Courses</div>
+          <h2 className="h2">Go deeper with structured tracks</h2>
+          <div className="course-grid-home">
+            {coursesData.length ? (
+              coursesData.map((course) => (
+                <article className="course-home-card" key={course.id}>
+                  <h3>{course.title}</h3>
+                  <p className="meta">{course.lessons.length} lessons</p>
+                  <p className="muted">{course.description}</p>
+                  <Link href={`/courses/${course.slug}`} className="btn btn-outline" style={{ marginTop: "0.8rem" }}>
+                    Start Course
+                  </Link>
+                </article>
+              ))
+            ) : (
+              courses.map((course) => (
+                <article className="course-home-card" key={course.title}>
+                  <h3>{course.title}</h3>
+                  <p className="meta">{course.meta}</p>
+                  <span className="course-tag">{course.tag}</span>
+                </article>
+              ))
+            )}
           </div>
         </section>
 
@@ -565,9 +624,9 @@ export default function HomePageClient({
               <a className="btn btn-primary" href="#topics">
                 Start with Basics
               </a>
-              <a className="btn btn-outline" href="#subscribe" style={{ color: "#fff", borderColor: "rgba(255,255,255,0.35)" }}>
+              <Link className="btn btn-outline" href="/courses" style={{ color: "#fff", borderColor: "rgba(255,255,255,0.35)" }}>
                 View Courses
-              </a>
+              </Link>
             </div>
           </div>
         </section>
@@ -578,4 +637,15 @@ export default function HomePageClient({
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
 

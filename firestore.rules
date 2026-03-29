@@ -83,6 +83,41 @@ service cloud.firestore {
       allow read, delete: if isAdmin();
     }
 
+    match /webinars/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /webinar_registrations/{docId} {
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.webinarId is string;
+      allow read: if (isSignedIn() && resource.data.userId == request.auth.uid) || isAdmin();
+      allow update, delete: if isAdmin();
+    }
+
+    match /courses/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /course_progress/{docId} {
+      allow create, update: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow read: if (isSignedIn() && resource.data.userId == request.auth.uid) || isAdmin();
+      allow delete: if false;
+    }
+
+    match /certificate_templates/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /certificates/{docId} {
+      allow create: if (isSignedIn() && request.resource.data.userId == request.auth.uid) || isAdmin();
+      allow read: if (isSignedIn() && resource.data.userId == request.auth.uid) || isAdmin();
+      allow update, delete: if isAdmin();
+    }
+
     match /site_settings/{docId} {
       allow read: if true;
       allow write: if isAdmin();
@@ -93,4 +128,3 @@ service cloud.firestore {
     }
   }
 }
-

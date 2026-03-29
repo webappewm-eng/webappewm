@@ -1,4 +1,4 @@
-export interface Category {
+﻿export interface Category {
   id: string;
   name: string;
   slug: string;
@@ -89,6 +89,7 @@ export interface NavigationLink {
   href: string;
   location: "header" | "footer";
   order: number;
+  parentId?: string;
   enabled: boolean;
   openInNewTab: boolean;
   updatedAt: string;
@@ -105,7 +106,7 @@ export interface NotificationMessage {
 
 export interface AnalyticsEvent {
   id: string;
-  type: "post_view" | "pdf_download" | "feedback";
+  type: "post_view" | "pdf_download" | "feedback" | "post_share";
   postId?: string;
   userId?: string;
   createdAt: string;
@@ -123,6 +124,7 @@ export interface SiteSettings {
   id: string;
   liveTrackingEnabled: boolean;
   themeMode: "light" | "dark";
+  layoutSideGap: number;
   logoMode: "text" | "image";
   logoImageUrl: string;
   logoSize: number;
@@ -144,9 +146,106 @@ export interface SiteSettings {
   updatedAt: string;
 }
 
+export interface Webinar {
+  id: string;
+  title: string;
+  slug: string;
+  description: string;
+  bannerImage: string;
+  startAt: string;
+  endAt: string;
+  meetingUrl: string;
+  shortcode: string;
+  isPublished: boolean;
+  showOnHome: boolean;
+  showPublicPage: boolean;
+  updatedAt: string;
+}
+
+export interface WebinarRegistration {
+  id: string;
+  webinarId: string;
+  userId: string;
+  userEmail: string;
+  userName: string;
+  createdAt: string;
+}
+
+export interface CourseLesson {
+  id: string;
+  title: string;
+  content: string;
+  order: number;
+}
+
+export interface CourseQuestion {
+  question: string;
+  options: string[];
+  correctOptionIndex: number;
+}
+
+export interface Course {
+  id: string;
+  title: string;
+  slug: string;
+  description: string;
+  coverImage: string;
+  templateId?: string;
+  lessons: CourseLesson[];
+  passingScore: number;
+  questions: CourseQuestion[];
+  isPublished: boolean;
+  updatedAt: string;
+}
+
+export interface UserCourseProgress {
+  id: string;
+  courseId: string;
+  userId: string;
+  userEmail: string;
+  completedLessonIds: string[];
+  testUnlocked: boolean;
+  testPassed: boolean;
+  score: number;
+  certificateId?: string;
+  updatedAt: string;
+}
+
+export interface CertificateTemplate {
+  id: string;
+  name: string;
+  backgroundImage: string;
+  signatureImage: string;
+  enabled: boolean;
+  updatedAt: string;
+}
+
+export interface UserCertificate {
+  id: string;
+  courseId: string;
+  userId: string;
+  userEmail: string;
+  userName: string;
+  templateId: string;
+  issuedAt: string;
+  certificateNumber: string;
+}
+
+export interface PostAnalyticsBreakdown {
+  postId: string;
+  title: string;
+  views: number;
+  downloads: number;
+  shares: number;
+}
+
 export interface AnalyticsSummary {
   activeUsers: number;
   views: number;
   downloads: number;
+  shares: number;
   feedbackCount: number;
 }
+
+
+

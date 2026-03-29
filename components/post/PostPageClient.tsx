@@ -127,7 +127,8 @@ export function PostPageClient({
   const [feedbackStatus, setFeedbackStatus] = useState("");
   const [subscribeEmail, setSubscribeEmail] = useState("");
   const [subscribeStatus, setSubscribeStatus] = useState("");
-  const [downloadType, setDownloadType] = useState<"txt" | "pdf">("txt");
+  const [downloadModalOpen, setDownloadModalOpen] = useState(false);
+  const [shareStatus, setShareStatus] = useState("");
 
   const previewTriggerRef = useRef<HTMLDivElement | null>(null);
 
@@ -241,24 +242,61 @@ export function PostPageClient({
     }
   }
 
-  function handleDownload() {
+  function handleDownloadText() {
     if (!post) {
       return;
     }
 
     const textPayload = `${post.title}\n\n${extractReadableText(post.content)}`;
+    downloadTextFile(`${post.slug}.txt`, textPayload);
+    void trackAnalyticsEvent({
+      type: "pdf_download",
+      postId: post.id,
+      userId: user?.uid ?? ""
+    });
+    setDownloadModalOpen(false);
+  }
 
-    if (downloadType === "txt") {
-      downloadTextFile(`${post.slug}.txt`, textPayload);
+  function handleDownloadPdf() {
+    if (!post) {
       return;
     }
 
+    const textPayload = `${post.title}\n\n${extractReadableText(post.content)}`;
     openPrintDialogAsPdf(post.title, textPayload);
     void trackAnalyticsEvent({
       type: "pdf_download",
       postId: post.id,
       userId: user?.uid ?? ""
     });
+    setDownloadModalOpen(false);
+  }
+
+  async function handleSharePost() {
+    if (!post || typeof window === "undefined") {
+      return;
+    }
+
+    const shareUrl = `${window.location.origin}/post/${post.slug}`;
+    setShareStatus("");
+
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: post.title, text: post.excerpt, url: shareUrl });
+        setShareStatus("Post shared successfully.");
+      } else {
+        await navigator.clipboard.writeText(shareUrl);
+        setShareStatus("Post link copied to clipboard.");
+      }
+
+      void trackAnalyticsEvent({
+        type: "post_share",
+        postId: post.id,
+        userId: user?.uid ?? ""
+      });
+    } catch {
+      setShareStatus("Share cancelled or failed.");
+    }
   }
 
   return (
@@ -283,19 +321,15 @@ export function PostPageClient({
                   <div className="label">{post.publishedAt}</div>
                   <h1>{post.title}</h1>
                   <p className="meta">{post.excerpt}</p>
-                  <div className="download-controls" style={{ marginTop: "1rem" }}>
-                    <select
-                      className="download-select"
-                      value={downloadType}
-                      onChange={(event) => setDownloadType(event.target.value as "txt" | "pdf")}
-                    >
-                      <option value="txt">Download Text (.txt)</option>
-                      <option value="pdf">Download PDF</option>
-                    </select>
-                    <button type="button" className="btn btn-primary" onClick={handleDownload}>
+                  <div className="post-actions-row" style={{ marginTop: "1rem" }}>
+                    <button type="button" className="btn btn-primary" onClick={() => setDownloadModalOpen(true)}>
                       Download
                     </button>
+                    <button type="button" className="share-btn" onClick={handleSharePost}>
+                      Share
+                    </button>
                   </div>
+                  {shareStatus ? <p className="muted" style={{ marginTop: "0.5rem" }}>{shareStatus}</p> : null}
                 </div>
               </article>
 
@@ -309,7 +343,7 @@ export function PostPageClient({
                     <div ref={previewTriggerRef} />
                     <div className="locked-overlay">
                       <h3 style={{ margin: 0, fontFamily: "var(--fd)" }}>{previewPercent}% preview reached</h3>
-                      <p className="meta">Read more to login and unlock the full content.</p>
+                      <p className="meta"><span className="read-more-highlight">Read more to login.</span> Unlock the full content.</p>
                       <button className="btn btn-primary" onClick={() => setLoginOpen(true)}>
                         Login to Continue
                       </button>
@@ -404,7 +438,37 @@ export function PostPageClient({
       </main>
 
       <Footer />
+
+      {downloadModalOpen ? (
+        <div className="modal-backdrop" role="presentation" onClick={() => setDownloadModalOpen(false)}>
+          <div className="modal" onClick={(event) => event.stopPropagation()}>
+            <h3>Download Post</h3>
+            <p>Choose your download format.</p>
+            <div className="download-modal-grid">
+              <button type="button" className="download-box-btn" onClick={handleDownloadText}>
+                Download Text
+              </button>
+              <button type="button" className="download-box-btn" onClick={handleDownloadPdf}>
+                Download PDF
+              </button>
+            </div>
+            <div className="form-actions" style={{ marginTop: "0.8rem" }}>
+              <button className="btn btn-outline" type="button" onClick={() => setDownloadModalOpen(false)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
     </div>
   );
 }
+
+
+
+
+
+
+

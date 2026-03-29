@@ -1,5 +1,5 @@
-import type { Metadata } from "next";
-import type { ReactNode } from "react";
+﻿import type { Metadata } from "next";
+import type { CSSProperties, ReactNode } from "react";
 import "./globals.css";
 import { AuthProvider } from "@/components/auth/AuthProvider";
 import { LiveTracker } from "@/components/layout/LiveTracker";
@@ -54,16 +54,19 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   let themeMode: "light" | "dark" = "light";
+  let layoutSideGap = 32;
 
   try {
     const settings = await getSiteSettings();
     themeMode = settings.themeMode;
+    layoutSideGap = settings.layoutSideGap;
   } catch {
     themeMode = "light";
+    layoutSideGap = 32;
   }
 
   return (
-    <html lang="en" data-theme={themeMode}>
+    <html lang="en" data-theme={themeMode} style={{ "--container-pad": `${layoutSideGap}px` } as CSSProperties}>
       <body>
         <AuthProvider>
           <PwaRegister />
@@ -76,4 +79,6 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     </html>
   );
 }
+
+
 

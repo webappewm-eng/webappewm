@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect } from "react";
 import { getSiteSettings } from "@/lib/firebase/data";
@@ -9,8 +9,10 @@ export function ThemeSync() {
       try {
         const settings = await getSiteSettings();
         document.documentElement.setAttribute("data-theme", settings.themeMode);
+        document.documentElement.style.setProperty("--container-pad", `${settings.layoutSideGap}px`);
       } catch {
         document.documentElement.setAttribute("data-theme", "light");
+        document.documentElement.style.setProperty("--container-pad", "32px");
       }
     }
 
@@ -19,3 +21,5 @@ export function ThemeSync() {
 
   return null;
 }
+
+

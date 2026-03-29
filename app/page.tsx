@@ -1,6 +1,6 @@
 import HomePageClient from "@/components/home/HomePageClient";
-import { getCategories, getPosts, getSubtopics } from "@/lib/firebase/data";
-import { Category, Post, Subtopic } from "@/lib/types";
+import { getCategories, getCourses, getHeroMedia, getPosts, getSiteSettings, getSubtopics, getWebinars } from "@/lib/firebase/data";
+import { Category, Course, HeroMediaItem, Post, Subtopic, Webinar } from "@/lib/types";
 
 export const revalidate = 60;
 
@@ -15,17 +15,45 @@ async function loadHomeData(): Promise<{
   categories: Category[];
   subtopics: Subtopic[];
   posts: Post[];
+  videoSlides: HeroMediaItem[];
+  imageSlides: HeroMediaItem[];
+  webinars: Webinar[];
+  courses: Course[];
+  previewPercent: number;
 }> {
   try {
-    const [categories, subtopics, posts] = await Promise.all([
+    const [categories, subtopics, posts, videoSlides, imageSlides, webinars, courses, settings] = await Promise.all([
       getCategories(),
       getSubtopics(),
-      getPosts()
+      getPosts(),
+      getHeroMedia("video"),
+      getHeroMedia("image"),
+      getWebinars(false),
+      getCourses(false),
+      getSiteSettings()
     ]);
 
-    return { categories, subtopics, posts };
+    return {
+      categories,
+      subtopics,
+      posts,
+      videoSlides,
+      imageSlides,
+      webinars,
+      courses,
+      previewPercent: settings.contentPreviewPercent
+    };
   } catch {
-    return { categories: [], subtopics: [], posts: [] };
+    return {
+      categories: [],
+      subtopics: [],
+      posts: [],
+      videoSlides: [],
+      imageSlides: [],
+      webinars: [],
+      courses: [],
+      previewPercent: 20
+    };
   }
 }
 
@@ -42,8 +70,14 @@ export default async function HomePage({
       initialCategories={data.categories}
       initialSubtopics={data.subtopics}
       initialPosts={data.posts}
+      initialVideoSlides={data.videoSlides}
+      initialImageSlides={data.imageSlides}
+      initialWebinars={data.webinars}
+      initialCourses={data.courses}
+      initialPreviewPercent={data.previewPercent}
       requestedCategory={firstParam(params.category).trim().toLowerCase()}
       requestedSubtopic={firstParam(params.subtopic).trim().toLowerCase()}
+      requestedSearch={firstParam(params.search)}
     />
   );
 }

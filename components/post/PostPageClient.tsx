@@ -17,6 +17,18 @@ interface PostPageClientProps {
   initialRelated: Post[];
 }
 
+const FALLBACK_POST_IMAGE = "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80";
+
+function getSafeImageSrc(value: string | undefined): string {
+  const src = (value ?? "").trim();
+  if (!src) {
+    return FALLBACK_POST_IMAGE;
+  }
+  if (src.startsWith("/") || /^https?:\/\//i.test(src)) {
+    return src;
+  }
+  return FALLBACK_POST_IMAGE;
+}
 export function PostPageClient({ initialPost, initialRelated }: PostPageClientProps) {
   const { user } = useAuth();
 
@@ -193,7 +205,7 @@ export function PostPageClient({ initialPost, initialRelated }: PostPageClientPr
           ) : (
             <>
               <article className="post-hero">
-                <Image src={post.coverImage} alt={post.title} width={1400} height={800} />
+                <Image src={getSafeImageSrc(post.coverImage)} alt={post.title} width={1400} height={800} />
                 <div className="post-header">
                   <div className="label">{post.publishedAt}</div>
                   <h1>{post.title}</h1>
@@ -294,7 +306,7 @@ export function PostPageClient({ initialPost, initialRelated }: PostPageClientPr
                   <div className="card-grid">
                     {related.map((item) => (
                       <article className="post-card" key={item.id}>
-                        <Image src={item.coverImage} alt={item.title} width={1200} height={800} />
+                        <Image src={getSafeImageSrc(item.coverImage)} alt={item.title} width={1200} height={800} />
                         <h3>{item.title}</h3>
                         <p className="meta">{item.excerpt}</p>
                         <Link href={`/post/${item.slug}`} className="btn btn-outline" style={{ marginTop: "0.8rem" }}>

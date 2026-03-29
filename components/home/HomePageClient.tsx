@@ -123,6 +123,18 @@ const courses = [
   }
 ];
 
+const FALLBACK_POST_IMAGE = "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80";
+
+function getSafeImageSrc(value: string | undefined): string {
+  const src = (value ?? "").trim();
+  if (!src) {
+    return FALLBACK_POST_IMAGE;
+  }
+  if (src.startsWith("/") || /^https?:\/\//i.test(src)) {
+    return src;
+  }
+  return FALLBACK_POST_IMAGE;
+}
 interface HomePageClientProps {
   initialCategories: Category[];
   initialSubtopics: Subtopic[];
@@ -451,7 +463,7 @@ export default function HomePageClient({
           <div className="card-grid">
             {filteredPosts.map((post) => (
               <article key={post.id} className="post-card">
-                <Image src={post.coverImage} alt={post.title} width={1200} height={800} />
+                <Image src={getSafeImageSrc(post.coverImage)} alt={post.title} width={1200} height={800} />
                 <h3>{post.title}</h3>
                 <p className="meta">{post.excerpt}</p>
                 <div className="tag-row">

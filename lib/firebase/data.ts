@@ -181,43 +181,51 @@ export async function getPosts(filters?: {
     return sortByDateDesc(rows);
   }
 
-  const applyFilters = (rows: Post[]): Post[] => {
-    let filtered = [...rows];
-    if (filters?.categoryId) {
-      filtered = filtered.filter((item) => item.categoryId === filters.categoryId);
-    }
-    if (filters?.subtopicId) {
-      filtered = filtered.filter((item) => item.subtopicId === filters.subtopicId);
-    }
-    if (!includeDrafts) {
-      filtered = filtered.filter((item) => item.isPublished);
-    }
-    return sortByDateDesc(filtered);
-  };
+  const constraints: QueryConstraint[] = [];
+  if (!includeDrafts) {
+    constraints.push(where("isPublished", "==", true));
+  }
+  if (filters?.categoryId) {
+    constraints.push(where("categoryId", "==", filters.categoryId));
+  }
+  if (filters?.subtopicId) {
+    constraints.push(where("subtopicId", "==", filters.subtopicId));
+  }
+
+  const mapRows = (rows: Post[]): Post[] => sortByDateDesc(rows);
 
   try {
-    const snap = await getDocs(query(collection(db, "posts"), orderBy("publishedAt", "desc")));
+    const snap = await getDocs(query(collection(db, "posts"), ...constraints, orderBy("publishedAt", "desc")));
     const rows = snap.docs.map((item) => ({ id: item.id, ...(item.data() as Omit<Post, "id">) }));
-    return applyFilters(rows);
+    return mapRows(rows);
   } catch {
-    const snap = await getDocs(collection(db, "posts"));
+    const snap = constraints.length
+      ? await getDocs(query(collection(db, "posts"), ...constraints))
+      : await getDocs(collection(db, "posts"));
     const rows = snap.docs.map((item) => ({ id: item.id, ...(item.data() as Omit<Post, "id">) }));
-    return applyFilters(rows);
+    return mapRows(rows);
   }
 }
 
 export async function getPostBySlug(slug: string): Promise<Post | null> {
   if (!hasFirebaseConfig || !db) {
-    return localStore.posts.find((item) => item.slug === slug) ?? null;
+    const post = localStore.posts.find((item) => item.slug === slug && item.isPublished);
+    return post ?? null;
   }
 
-  const snap = await getDocs(query(collection(db, "posts"), where("slug", "==", slug)));
-  if (snap.empty) {
+  try {
+    const snap = await getDocs(
+      query(collection(db, "posts"), where("slug", "==", slug), where("isPublished", "==", true))
+    );
+    if (snap.empty) {
+      return null;
+    }
+
+    const row = snap.docs[0];
+    return { id: row.id, ...(row.data() as Omit<Post, "id">) };
+  } catch {
     return null;
   }
-
-  const row = snap.docs[0];
-  return { id: row.id, ...(row.data() as Omit<Post, "id">) };
 }
 
 export async function saveSubscription(email: string, topicId?: string): Promise<void> {

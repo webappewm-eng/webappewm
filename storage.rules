@@ -1,11 +1,15 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    // Authenticated users can read public assets and uploads.
+    function isAdmin() {
+      return request.auth != null
+        && request.auth.token.email is string
+        && request.auth.token.email == "webappewm@gmail.com";
+    }
+
     match /{allPaths=**} {
-      allow read: if request.auth != null;
-      // Only admins should write from trusted backend/admin flows.
-      allow write: if false;
+      allow read: if true;
+      allow write: if isAdmin();
     }
   }
 }

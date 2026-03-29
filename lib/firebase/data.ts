@@ -83,8 +83,14 @@ export async function getCategories(): Promise<Category[]> {
     return sortByOrder(localStore.categories);
   }
 
-  const snap = await getDocs(query(collection(db, "categories"), orderBy("order", "asc")));
-  return snap.docs.map((item) => ({ id: item.id, ...(item.data() as Omit<Category, "id">) }));
+  try {
+    const snap = await getDocs(query(collection(db, "categories"), orderBy("order", "asc")));
+    return snap.docs.map((item) => ({ id: item.id, ...(item.data() as Omit<Category, "id">) }));
+  } catch {
+    const snap = await getDocs(collection(db, "categories"));
+    const rows = snap.docs.map((item) => ({ id: item.id, ...(item.data() as Omit<Category, "id">) }));
+    return sortByOrder(rows);
+  }
 }
 
 export async function getSubtopics(categoryId?: string): Promise<Subtopic[]> {
@@ -685,4 +691,5 @@ export async function upsertAdminProfile(uid: string, email: string): Promise<vo
     { merge: true }
   );
 }
+
 

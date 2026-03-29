@@ -1,8 +1,9 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Footer } from "@/components/layout/Footer";
+import { uploadPostImage } from "@/lib/firebase/storage";
 import { Header } from "@/components/layout/Header";
 import { RichPostEditor } from "@/components/editor/RichPostEditor";
 import {
@@ -112,6 +113,8 @@ export default function AdminPage() {
 
   const [status, setStatus] = useState("");
   const [siteOrigin, setSiteOrigin] = useState("");
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState("");
 
   const refreshAll = useCallback(async () => {
     const [
@@ -257,6 +260,27 @@ export default function AdminPage() {
     await refreshAll();
   }
 
+  async function handleCoverImageUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    setUploadStatus("");
+    setUploadingImage(true);
+
+    try {
+      const url = await uploadPostImage(file);
+      setPostForm((prev) => ({ ...prev, coverImage: url }));
+      setUploadStatus("Image uploaded and attached to cover image URL.");
+    } catch {
+      setUploadStatus("Image upload failed. Please check Firebase Storage setup, then try again.");
+    } finally {
+      setUploadingImage(false);
+      event.target.value = "";
+    }
+  }
+
   async function handlePostSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setStatus("");
@@ -290,6 +314,7 @@ export default function AdminPage() {
       setStatus("Post created.");
     }
 
+    setUploadStatus("");
     setPostForm(emptyPostForm);
     setPostEditingId("");
     await refreshAll();
@@ -440,6 +465,9 @@ export default function AdminPage() {
                 onChange={(value) => setPostForm((prev) => ({ ...prev, content: value }))}
               />
               <input placeholder="Cover image URL" value={postForm.coverImage} onChange={(event) => setPostForm((prev) => ({ ...prev, coverImage: event.target.value }))} required />
+              <input type="file" accept="image/*" onChange={handleCoverImageUpload} />
+              {uploadingImage ? <p className="muted">Uploading image...</p> : null}
+              {uploadStatus ? <div className="notice">{uploadStatus}</div> : null}
               <input placeholder="Tags (comma separated)" value={postForm.tags} onChange={(event) => setPostForm((prev) => ({ ...prev, tags: event.target.value }))} />
               <select value={postForm.categoryId} onChange={(event) => {
                 const categoryId = event.target.value;
@@ -651,6 +679,12 @@ export default function AdminPage() {
     </div>
   );
 }
+
+
+
+
+
+
 
 
 

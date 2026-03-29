@@ -73,6 +73,17 @@ export interface ThirdPartyScript {
   updatedAt: string;
 }
 
+export interface NavigationLink {
+  id: string;
+  label: string;
+  href: string;
+  location: "header" | "footer";
+  order: number;
+  enabled: boolean;
+  openInNewTab: boolean;
+  updatedAt: string;
+}
+
 export interface NotificationMessage {
   id: string;
   title: string;
@@ -101,6 +112,9 @@ export interface LivePresence {
 export interface SiteSettings {
   id: string;
   liveTrackingEnabled: boolean;
+  notFoundRedirectType: "home" | "custom";
+  notFoundRedirectPath: string;
+  notFoundButtonLabel: string;
   updatedAt: string;
 }
 

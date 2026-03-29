@@ -1,12 +1,74 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useState } from "react";
-import { saveSubscription } from "@/lib/firebase/data";
+import { FormEvent, useEffect, useState } from "react";
+import { getNavigationLinks, saveSubscription } from "@/lib/firebase/data";
+import { NavigationLink } from "@/lib/types";
+
+const fallbackFooterLinks: NavigationLink[] = [
+  {
+    id: "fallback-footer-terms",
+    label: "Terms and Conditions",
+    href: "/pages/terms-and-conditions",
+    location: "footer",
+    order: 1,
+    enabled: true,
+    openInNewTab: false,
+    updatedAt: ""
+  },
+  {
+    id: "fallback-footer-privacy",
+    label: "Privacy Policy",
+    href: "/pages/privacy-policy",
+    location: "footer",
+    order: 2,
+    enabled: true,
+    openInNewTab: false,
+    updatedAt: ""
+  },
+  {
+    id: "fallback-footer-about",
+    label: "About",
+    href: "/pages/about",
+    location: "footer",
+    order: 3,
+    enabled: true,
+    openInNewTab: false,
+    updatedAt: ""
+  }
+];
+
+function FooterLinkItem({ item }: { item: NavigationLink }) {
+  if (item.href.startsWith("/")) {
+    return <Link href={item.href}>{item.label}</Link>;
+  }
+
+  return (
+    <a href={item.href} target={item.openInNewTab ? "_blank" : undefined} rel={item.openInNewTab ? "noreferrer" : undefined}>
+      {item.label}
+    </a>
+  );
+}
 
 export function Footer() {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState("");
+  const [footerLinks, setFooterLinks] = useState<NavigationLink[]>(fallbackFooterLinks);
+
+  useEffect(() => {
+    async function loadLinks() {
+      try {
+        const rows = await getNavigationLinks("footer");
+        if (rows.length) {
+          setFooterLinks(rows);
+        }
+      } catch {
+        setFooterLinks(fallbackFooterLinks);
+      }
+    }
+
+    void loadLinks();
+  }, []);
 
   async function handleSubscribe(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -57,15 +119,11 @@ export function Footer() {
         <div>
           <h4>Pages</h4>
           <ul>
-            <li>
-              <Link href="/pages/terms-and-conditions">Terms and Conditions</Link>
-            </li>
-            <li>
-              <Link href="/pages/privacy-policy">Privacy Policy</Link>
-            </li>
-            <li>
-              <Link href="/pages/about">About</Link>
-            </li>
+            {footerLinks.map((item) => (
+              <li key={item.id}>
+                <FooterLinkItem item={item} />
+              </li>
+            ))}
           </ul>
         </div>
 
@@ -87,8 +145,8 @@ export function Footer() {
       </div>
 
       <div className="footer-bottom">
-        <span>Ã‚Â© 2026 Engineer With Me</span>
-        <span>PWA enabled Ã¢â‚¬Â¢ Firebase powered</span>
+        <span>(c) 2026 Engineer With Me</span>
+        <span>PWA enabled - Firebase powered</span>
       </div>
     </footer>
   );

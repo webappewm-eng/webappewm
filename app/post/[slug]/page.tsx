@@ -1,3 +1,4 @@
+import { notFound } from "next/navigation";
 import { PostPageClient } from "@/components/post/PostPageClient";
 import { getPostBySlug, getPosts } from "@/lib/firebase/data";
 import { Post } from "@/lib/types";
@@ -27,6 +28,9 @@ export default async function PostPage({
   const { slug } = await params;
   const data = await loadPostData(slug);
 
+  if (!data.post) {
+    notFound();
+  }
+
   return <PostPageClient initialPost={data.post} initialRelated={data.related} />;
 }
-

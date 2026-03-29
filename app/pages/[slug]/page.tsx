@@ -1,10 +1,24 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { Footer } from "@/components/layout/Footer";
-import { getCustomPageBySlug } from "@/lib/firebase/data";
+import { Header } from "@/components/layout/Header";
+import { getCustomPageBySlug, getCustomPages } from "@/lib/firebase/data";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
+}
+
+export const revalidate = 60;
+export const dynamicParams = true;
+
+export async function generateStaticParams() {
+  try {
+    const pages = await getCustomPages(false);
+    return pages.map((page) => ({ slug: page.slug }));
+  } catch {
+    return [];
+  }
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -28,21 +42,12 @@ export default async function CustomPageRoute({ params }: PageProps) {
   const page = await getCustomPageBySlug(slug);
 
   if (!page) {
-    return (
-      <div className="app-shell">
-        <main className="page-main">
-          <div className="page-wrap">
-            <div className="notice">
-              Page not found. <Link href="/">Go Home</Link>
-            </div>
-          </div>
-        </main>
-      </div>
-    );
+    notFound();
   }
 
   return (
     <div className="app-shell">
+      <Header onOpenLogin={() => undefined} />
       <main className="page-main">
         <div className="page-wrap">
           <p className="breadcrumb">

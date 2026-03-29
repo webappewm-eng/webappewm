@@ -20,7 +20,8 @@ import {
   mockPosts,
   mockSiteSettings,
   mockSubtopics,
-  mockThirdPartyScripts
+  mockThirdPartyScripts,
+  mockNavigationLinks
 } from "@/lib/mock-data";
 import {
   AnalyticsEvent,
@@ -29,6 +30,7 @@ import {
   CustomPage,
   Feedback,
   LivePresence,
+  NavigationLink,
   NotificationMessage,
   Post,
   SiteSettings,
@@ -45,6 +47,7 @@ const localStore = {
   subscriptions: [] as Subscription[],
   customPages: [...mockCustomPages],
   scripts: [...mockThirdPartyScripts],
+  navigationLinks: [...mockNavigationLinks],
   notifications: [] as NotificationMessage[],
   analyticsEvents: [] as AnalyticsEvent[],
   livePresence: [] as LivePresence[],
@@ -76,6 +79,50 @@ function normalizeDate(rawDate: unknown): string {
   }
 
   return new Date().toISOString();
+}
+
+function normalizeNavigationHref(rawHref: unknown): string {
+  const value = String(rawHref ?? "").trim();
+  if (!value) {
+    return "/";
+  }
+
+  if (/^https?:\/\//i.test(value)) {
+    return value;
+  }
+
+  if (value.startsWith("#")) {
+    return value;
+  }
+
+  return value.startsWith("/") ? value : `/${value}`;
+}
+function normalizeRedirectPath(rawPath: unknown): string {
+  const value = String(rawPath ?? "").trim();
+  if (!value) {
+    return "/";
+  }
+
+  if (/^https?:\/\//i.test(value)) {
+    return "/";
+  }
+
+  return value.startsWith("/") ? value : `/${value}`;
+}
+
+function normalizeSiteSettings(raw: Partial<SiteSettings> | Record<string, unknown>): SiteSettings {
+  const redirectType = raw.notFoundRedirectType === "custom" ? "custom" : "home";
+  const redirectPath = normalizeRedirectPath(raw.notFoundRedirectPath);
+  const buttonLabel = String(raw.notFoundButtonLabel ?? "").trim();
+
+  return {
+    id: String(raw.id ?? "global"),
+    liveTrackingEnabled: raw.liveTrackingEnabled !== false,
+    notFoundRedirectType: redirectType,
+    notFoundRedirectPath: redirectType === "custom" ? redirectPath : "/",
+    notFoundButtonLabel: buttonLabel || (redirectType === "custom" ? "Open Redirect Page" : "Go to Home"),
+    updatedAt: normalizeDate(raw.updatedAt)
+  };
 }
 
 export async function getCategories(): Promise<Category[]> {
@@ -495,6 +542,131 @@ export async function deleteThirdPartyScript(id: string): Promise<void> {
   await deleteDoc(doc(db, "third_party_scripts", id));
 }
 
+export async function getNavigationLinks(location?: NavigationLink["location"]): Promise<NavigationLink[]> {
+  const filterRows = (rows: NavigationLink[]) => {
+    const enabledRows = rows.filter((item) => item.enabled);
+    const filtered = location ? enabledRows.filter((item) => item.location === location) : enabledRows;
+    return sortByOrder(filtered);
+  };
+
+  if (!hasFirebaseConfig || !db) {
+    return filterRows(localStore.navigationLinks);
+  }
+
+  const mapDoc = (data: Record<string, unknown>, id: string): NavigationLink => ({
+    id,
+    label: String(data.label ?? ""),
+    href: normalizeNavigationHref(data.href),
+    location: data.location === "footer" ? "footer" : "header",
+    order: Number(data.order ?? 0),
+    enabled: data.enabled !== false,
+    openInNewTab: Boolean(data.openInNewTab),
+    updatedAt: normalizeDate(data.updatedAt)
+  });
+
+  try {
+    const snap = await getDocs(query(collection(db, "navigation_links"), orderBy("order", "asc")));
+    return filterRows(snap.docs.map((item) => mapDoc(item.data() as Record<string, unknown>, item.id)));
+  } catch {
+    const snap = await getDocs(collection(db, "navigation_links"));
+    return filterRows(snap.docs.map((item) => mapDoc(item.data() as Record<string, unknown>, item.id)));
+  }
+}
+
+export async function getNavigationLinksForAdmin(): Promise<NavigationLink[]> {
+  if (!hasFirebaseConfig || !db) {
+    return sortByOrder(localStore.navigationLinks);
+  }
+
+  try {
+    const snap = await getDocs(query(collection(db, "navigation_links"), orderBy("order", "asc")));
+    return snap.docs.map((item) => {
+      const data = item.data() as Record<string, unknown>;
+      return {
+        id: item.id,
+        label: String(data.label ?? ""),
+        href: normalizeNavigationHref(data.href),
+        location: data.location === "footer" ? "footer" : "header",
+        order: Number(data.order ?? 0),
+        enabled: data.enabled !== false,
+        openInNewTab: Boolean(data.openInNewTab),
+        updatedAt: normalizeDate(data.updatedAt)
+      };
+    });
+  } catch {
+    const snap = await getDocs(collection(db, "navigation_links"));
+    const rows = snap.docs.map((item) => {
+      const data = item.data() as Record<string, unknown>;
+      return {
+        id: item.id,
+        label: String(data.label ?? ""),
+        href: normalizeNavigationHref(data.href),
+        location: data.location === "footer" ? "footer" : "header",
+        order: Number(data.order ?? 0),
+        enabled: data.enabled !== false,
+        openInNewTab: Boolean(data.openInNewTab),
+        updatedAt: normalizeDate(data.updatedAt)
+      } as NavigationLink;
+    });
+    return sortByOrder(rows);
+  }
+}
+
+export async function createNavigationLink(input: Omit<NavigationLink, "id" | "updatedAt">): Promise<void> {
+  const payload = {
+    ...input,
+    href: normalizeNavigationHref(input.href),
+    updatedAt: new Date().toISOString()
+  };
+
+  if (!hasFirebaseConfig || !db) {
+    localStore.navigationLinks.push({ id: `nav-${Date.now()}`, ...payload });
+    return;
+  }
+
+  await addDoc(collection(db, "navigation_links"), {
+    ...payload,
+    updatedAt: serverTimestamp()
+  });
+}
+
+export async function updateNavigationLink(
+  id: string,
+  input: Partial<Omit<NavigationLink, "id" | "updatedAt">>
+): Promise<void> {
+  const normalizedInput: Partial<Omit<NavigationLink, "id" | "updatedAt">> = {
+    ...input,
+    ...(typeof input.href === "string" ? { href: normalizeNavigationHref(input.href) } : {})
+  };
+
+  if (!hasFirebaseConfig || !db) {
+    localStore.navigationLinks = localStore.navigationLinks.map((item) =>
+      item.id === id
+        ? {
+            ...item,
+            ...normalizedInput,
+            updatedAt: new Date().toISOString()
+          }
+        : item
+    );
+    return;
+  }
+
+  await updateDoc(doc(db, "navigation_links", id), {
+    ...normalizedInput,
+    updatedAt: serverTimestamp()
+  });
+}
+
+export async function deleteNavigationLink(id: string): Promise<void> {
+  if (!hasFirebaseConfig || !db) {
+    localStore.navigationLinks = localStore.navigationLinks.filter((item) => item.id !== id);
+    return;
+  }
+
+  await deleteDoc(doc(db, "navigation_links", id));
+}
+
 export async function createNotification(input: Omit<NotificationMessage, "id" | "createdAt">): Promise<void> {
   const payload = {
     ...input,
@@ -581,33 +753,28 @@ export async function heartbeatLivePresence(input: { userId: string; email?: str
 
 export async function getSiteSettings(): Promise<SiteSettings> {
   if (!hasFirebaseConfig || !db) {
-    return { ...localStore.siteSettings };
+    return normalizeSiteSettings(localStore.siteSettings);
   }
 
   const snap = await getDoc(doc(db, "site_settings", "global"));
   if (!snap.exists()) {
-    return {
-      id: "global",
-      liveTrackingEnabled: true,
-      updatedAt: new Date().toISOString()
-    };
+    return normalizeSiteSettings({ id: "global" });
   }
 
   const data = snap.data() as Record<string, unknown>;
-  return {
-    id: "global",
-    liveTrackingEnabled: data.liveTrackingEnabled !== false,
-    updatedAt: normalizeDate(data.updatedAt)
-  };
+  return normalizeSiteSettings({
+    ...data,
+    id: "global"
+  });
 }
 
 export async function updateLiveTracking(enabled: boolean): Promise<void> {
   if (!hasFirebaseConfig || !db) {
-    localStore.siteSettings = {
+    localStore.siteSettings = normalizeSiteSettings({
       ...localStore.siteSettings,
       liveTrackingEnabled: enabled,
       updatedAt: new Date().toISOString()
-    };
+    });
     return;
   }
 
@@ -615,6 +782,38 @@ export async function updateLiveTracking(enabled: boolean): Promise<void> {
     doc(db, "site_settings", "global"),
     {
       liveTrackingEnabled: enabled,
+      updatedAt: serverTimestamp()
+    },
+    { merge: true }
+  );
+}
+
+export async function updateNotFoundSettings(input: {
+  notFoundRedirectType: SiteSettings["notFoundRedirectType"];
+  notFoundRedirectPath: string;
+  notFoundButtonLabel: string;
+}): Promise<void> {
+  const nextRedirectType = input.notFoundRedirectType === "custom" ? "custom" : "home";
+  const nextRedirectPath = normalizeRedirectPath(input.notFoundRedirectPath);
+  const nextButtonLabel = input.notFoundButtonLabel.trim();
+
+  if (!hasFirebaseConfig || !db) {
+    localStore.siteSettings = normalizeSiteSettings({
+      ...localStore.siteSettings,
+      notFoundRedirectType: nextRedirectType,
+      notFoundRedirectPath: nextRedirectType === "custom" ? nextRedirectPath : "/",
+      notFoundButtonLabel: nextButtonLabel || (nextRedirectType === "custom" ? "Open Redirect Page" : "Go to Home"),
+      updatedAt: new Date().toISOString()
+    });
+    return;
+  }
+
+  await setDoc(
+    doc(db, "site_settings", "global"),
+    {
+      notFoundRedirectType: nextRedirectType,
+      notFoundRedirectPath: nextRedirectType === "custom" ? nextRedirectPath : "/",
+      notFoundButtonLabel: nextButtonLabel || (nextRedirectType === "custom" ? "Open Redirect Page" : "Go to Home"),
       updatedAt: serverTimestamp()
     },
     { merge: true }

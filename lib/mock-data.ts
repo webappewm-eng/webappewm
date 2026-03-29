@@ -1,4 +1,4 @@
-import { Category, CustomPage, Post, SiteSettings, Subtopic, ThirdPartyScript } from "@/lib/types";
+import { Category, CustomPage, NavigationLink, Post, SiteSettings, Subtopic, ThirdPartyScript } from "@/lib/types";
 
 export const mockCategories: Category[] = [
   {
@@ -107,8 +107,74 @@ export const mockCustomPages: CustomPage[] = [
 
 export const mockThirdPartyScripts: ThirdPartyScript[] = [];
 
+export const mockNavigationLinks: NavigationLink[] = [
+  {
+    id: "nav-header-categories",
+    label: "Categories",
+    href: "#categories",
+    location: "header",
+    order: 1,
+    enabled: true,
+    openInNewTab: false,
+    updatedAt: "2026-03-28"
+  },
+  {
+    id: "nav-header-topics",
+    label: "Topics",
+    href: "#topics",
+    location: "header",
+    order: 2,
+    enabled: true,
+    openInNewTab: false,
+    updatedAt: "2026-03-28"
+  },
+  {
+    id: "nav-header-subscribe",
+    label: "Subscribe",
+    href: "#subscribe",
+    location: "header",
+    order: 3,
+    enabled: true,
+    openInNewTab: false,
+    updatedAt: "2026-03-28"
+  },
+  {
+    id: "nav-footer-terms",
+    label: "Terms and Conditions",
+    href: "/pages/terms-and-conditions",
+    location: "footer",
+    order: 1,
+    enabled: true,
+    openInNewTab: false,
+    updatedAt: "2026-03-28"
+  },
+  {
+    id: "nav-footer-privacy",
+    label: "Privacy Policy",
+    href: "/pages/privacy-policy",
+    location: "footer",
+    order: 2,
+    enabled: true,
+    openInNewTab: false,
+    updatedAt: "2026-03-28"
+  },
+  {
+    id: "nav-footer-about",
+    label: "About",
+    href: "/pages/about",
+    location: "footer",
+    order: 3,
+    enabled: true,
+    openInNewTab: false,
+    updatedAt: "2026-03-28"
+  }
+];
+
 export const mockSiteSettings: SiteSettings = {
-  id: "site-settings",
+  id: "global",
   liveTrackingEnabled: true,
+  notFoundRedirectType: "home",
+  notFoundRedirectPath: "/",
+  notFoundButtonLabel: "Go to Home",
   updatedAt: "2026-03-28"
 };

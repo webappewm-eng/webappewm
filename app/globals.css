@@ -49,6 +49,8 @@ select {
 
 .app-shell {
   min-height: 100vh;
+  display: flex;
+  flex-direction: column;
   background: var(--bg);
 }
 
@@ -157,6 +159,7 @@ select {
 }
 
 .page-main {
+  flex: 1;
   padding-top: var(--nav-h);
 }
 
@@ -1089,4 +1092,11 @@ select {
 
 .post-html code {
   font-family: var(--fm);
+}
+
+.not-found-panel {
+  min-height: 46vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }

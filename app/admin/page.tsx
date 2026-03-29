@@ -10,11 +10,13 @@ import {
   createCategory,
   createCustomPage,
   createNotification,
+  createNavigationLink,
   createPost,
   createSubtopic,
   createThirdPartyScript,
   deleteCategory,
   deleteCustomPage,
+  deleteNavigationLink,
   deletePost,
   deleteSubtopic,
   deleteThirdPartyScript,
@@ -23,6 +25,7 @@ import {
   getCustomPages,
   getFeedback,
   getNotifications,
+  getNavigationLinksForAdmin,
   getPosts,
   getSiteSettings,
   getSubtopics,
@@ -31,6 +34,8 @@ import {
   updateCategory,
   updateCustomPage,
   updateLiveTracking,
+  updateNavigationLink,
+  updateNotFoundSettings,
   updatePost,
   updateSubtopic,
   updateThirdPartyScript
@@ -40,6 +45,7 @@ import {
   Category,
   CustomPage,
   Feedback,
+  NavigationLink,
   NotificationMessage,
   Post,
   SiteSettings,
@@ -83,6 +89,7 @@ export default function AdminPage() {
   const [scripts, setScripts] = useState<ThirdPartyScript[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [notifications, setNotifications] = useState<NotificationMessage[]>([]);
+  const [navigationLinks, setNavigationLinks] = useState<NavigationLink[]>([]);
   const [analytics, setAnalytics] = useState<AnalyticsSummary>({
     activeUsers: 0,
     views: 0,
@@ -92,6 +99,9 @@ export default function AdminPage() {
   const [settings, setSettings] = useState<SiteSettings>({
     id: "global",
     liveTrackingEnabled: true,
+    notFoundRedirectType: "home",
+    notFoundRedirectPath: "/",
+    notFoundButtonLabel: "Go to Home",
     updatedAt: new Date().toISOString()
   });
 
@@ -111,6 +121,23 @@ export default function AdminPage() {
 
   const [notificationForm, setNotificationForm] = useState({ title: "", message: "", target: "website" as "website" | "topic", topicId: "" });
 
+  const [navForm, setNavForm] = useState({
+    label: "",
+    href: "",
+    location: "header" as NavigationLink["location"],
+    order: "1",
+    enabled: true,
+    openInNewTab: false
+  });
+  const [navEditingId, setNavEditingId] = useState("");
+
+  const [notFoundForm, setNotFoundForm] = useState({
+    notFoundRedirectType: "home" as SiteSettings["notFoundRedirectType"],
+    notFoundRedirectPath: "/",
+    notFoundButtonLabel: "Go to Home"
+  });
+
+
   const [status, setStatus] = useState("");
   const [siteOrigin, setSiteOrigin] = useState("");
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -126,6 +153,7 @@ export default function AdminPage() {
       nextScripts,
       nextSubscriptions,
       nextNotifications,
+      nextNavLinks,
       nextAnalytics,
       nextSettings
     ] = await Promise.all([
@@ -137,6 +165,7 @@ export default function AdminPage() {
       getThirdPartyScripts(),
       listSubscriptions(),
       getNotifications(),
+      getNavigationLinksForAdmin(),
       getAnalyticsSummary(),
       getSiteSettings()
     ]);
@@ -149,8 +178,14 @@ export default function AdminPage() {
     setScripts(nextScripts);
     setSubscriptions(nextSubscriptions);
     setNotifications(nextNotifications);
+    setNavigationLinks(nextNavLinks);
     setAnalytics(nextAnalytics);
     setSettings(nextSettings);
+    setNotFoundForm({
+      notFoundRedirectType: nextSettings.notFoundRedirectType,
+      notFoundRedirectPath: nextSettings.notFoundRedirectPath,
+      notFoundButtonLabel: nextSettings.notFoundButtonLabel
+    });
 
     setSubtopicForm((prev) => {
       if (prev.categoryId || !nextCategories[0]) {
@@ -198,7 +233,17 @@ export default function AdminPage() {
   }, [posts]);
 
   if (loading) {
-    return <div className="page-wrap">Checking admin access...</div>;
+    return (
+      <div className="app-shell">
+        <Header onOpenLogin={() => undefined} />
+        <main className="page-main">
+          <div className="page-wrap">
+            <div className="notice">Checking admin access...</div>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
   }
 
   if (!profile?.isAdmin) {
@@ -210,6 +255,7 @@ export default function AdminPage() {
             <div className="notice">Admin access required.</div>
           </div>
         </main>
+        <Footer />
       </div>
     );
   }
@@ -364,6 +410,54 @@ export default function AdminPage() {
     await refreshAll();
   }
 
+  async function handleNavigationLinkSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const payload = {
+      label: navForm.label.trim(),
+      href: navForm.href.trim(),
+      location: navForm.location,
+      order: Number(navForm.order || "0"),
+      enabled: navForm.enabled,
+      openInNewTab: navForm.openInNewTab
+    };
+
+    if (!payload.label || !payload.href) {
+      setStatus("Link label and URL are required.");
+      return;
+    }
+
+    if (navEditingId) {
+      await updateNavigationLink(navEditingId, payload);
+      setStatus("Navigation link updated.");
+    } else {
+      await createNavigationLink(payload);
+      setStatus("Navigation link created.");
+    }
+
+    setNavForm({
+      label: "",
+      href: "",
+      location: "header",
+      order: "1",
+      enabled: true,
+      openInNewTab: false
+    });
+    setNavEditingId("");
+    await refreshAll();
+  }
+  async function handleNotFoundSettingsSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    await updateNotFoundSettings({
+      notFoundRedirectType: notFoundForm.notFoundRedirectType,
+      notFoundRedirectPath: notFoundForm.notFoundRedirectPath,
+      notFoundButtonLabel: notFoundForm.notFoundButtonLabel
+    });
+
+    setStatus("404 page settings updated.");
+    await refreshAll();
+  }
   const filteredSubtopics = subtopics.filter((item) => item.categoryId === postForm.categoryId);
 
   return (
@@ -397,6 +491,167 @@ export default function AdminPage() {
               >
                 Live Tracking: {settings.liveTrackingEnabled ? "Enabled" : "Disabled"}
               </button>
+            </div>
+          </section>
+
+          <section className="admin-section admin-card">
+            <h3>404 Redirect Settings</h3>
+            <p className="muted">Configure where users should go from invalid URLs.</p>
+            <form className="form-grid" onSubmit={handleNotFoundSettingsSubmit}>
+              <select
+                value={notFoundForm.notFoundRedirectType}
+                onChange={(event) =>
+                  setNotFoundForm((prev) => ({
+                    ...prev,
+                    notFoundRedirectType: event.target.value as SiteSettings["notFoundRedirectType"]
+                  }))
+                }
+              >
+                <option value="home">Redirect to home page (/)</option>
+                <option value="custom">Redirect to custom page/path</option>
+              </select>
+
+              {notFoundForm.notFoundRedirectType === "custom" ? (
+                <input
+                  placeholder="/pages/privacy-policy"
+                  value={notFoundForm.notFoundRedirectPath}
+                  onChange={(event) =>
+                    setNotFoundForm((prev) => ({ ...prev, notFoundRedirectPath: event.target.value }))
+                  }
+                  required
+                />
+              ) : null}
+
+              <input
+                placeholder="Button label"
+                value={notFoundForm.notFoundButtonLabel}
+                onChange={(event) =>
+                  setNotFoundForm((prev) => ({ ...prev, notFoundButtonLabel: event.target.value }))
+                }
+                required
+              />
+
+              <button className="btn btn-primary" type="submit">
+                Save 404 Settings
+              </button>
+            </form>
+            <div className="notice" style={{ marginTop: "0.8rem" }}>
+              Current target: {settings.notFoundRedirectType === "custom" ? settings.notFoundRedirectPath : "/"}
+            </div>
+          </section>
+          <section className="admin-section admin-card">
+            <h3>Menu and Footer Links</h3>
+            <p className="muted">Create links for header menu and footer pages list.</p>
+            <form className="form-grid" onSubmit={handleNavigationLinkSubmit}>
+              <input
+                placeholder="Link label"
+                value={navForm.label}
+                onChange={(event) => setNavForm((prev) => ({ ...prev, label: event.target.value }))}
+                required
+              />
+              <input
+                placeholder="/pages/about or #topics or https://example.com"
+                value={navForm.href}
+                onChange={(event) => setNavForm((prev) => ({ ...prev, href: event.target.value }))}
+                required
+              />
+              <select
+                value={navForm.location}
+                onChange={(event) =>
+                  setNavForm((prev) => ({ ...prev, location: event.target.value as NavigationLink["location"] }))
+                }
+              >
+                <option value="header">Header menu</option>
+                <option value="footer">Footer links</option>
+              </select>
+              <input
+                type="number"
+                min={0}
+                placeholder="Display order"
+                value={navForm.order}
+                onChange={(event) => setNavForm((prev) => ({ ...prev, order: event.target.value }))}
+              />
+              <label>
+                <input
+                  type="checkbox"
+                  checked={navForm.enabled}
+                  onChange={(event) => setNavForm((prev) => ({ ...prev, enabled: event.target.checked }))}
+                />
+                Enabled
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={navForm.openInNewTab}
+                  onChange={(event) => setNavForm((prev) => ({ ...prev, openInNewTab: event.target.checked }))}
+                />
+                Open in new tab
+              </label>
+              <div className="form-actions">
+                <button className="btn btn-primary" type="submit">
+                  {navEditingId ? "Update Link" : "Add Link"}
+                </button>
+                {navEditingId ? (
+                  <button
+                    className="btn btn-outline"
+                    type="button"
+                    onClick={() => {
+                      setNavEditingId("");
+                      setNavForm({
+                        label: "",
+                        href: "",
+                        location: "header",
+                        order: "1",
+                        enabled: true,
+                        openInNewTab: false
+                      });
+                    }}
+                  >
+                    Cancel Edit
+                  </button>
+                ) : null}
+              </div>
+            </form>
+
+            <div className="table-like">
+              {navigationLinks.length ? (
+                navigationLinks.map((item) => (
+                  <div className="notice" key={item.id}>
+                    <strong>{item.label}</strong>
+                    <p className="muted">
+                      {item.location} | {item.href} | order {item.order} | {item.enabled ? "enabled" : "disabled"}
+                    </p>
+                    <div className="form-actions">
+                      <button
+                        className="btn btn-outline"
+                        type="button"
+                        onClick={() => {
+                          setNavEditingId(item.id);
+                          setNavForm({
+                            label: item.label,
+                            href: item.href,
+                            location: item.location,
+                            order: String(item.order),
+                            enabled: item.enabled,
+                            openInNewTab: item.openInNewTab
+                          });
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="btn btn-outline"
+                        type="button"
+                        onClick={() => void deleteNavigationLink(item.id).then(refreshAll)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="muted">No navigation links configured yet.</p>
+              )}
             </div>
           </section>
 

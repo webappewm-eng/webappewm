@@ -137,36 +137,80 @@ export default function HomePage() {
 
   const [loginOpen, setLoginOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+
+  const [requestedCategory, setRequestedCategory] = useState("");
+  const [requestedSubtopic, setRequestedSubtopic] = useState("");
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    setRequestedCategory((params.get("category") ?? "").trim().toLowerCase());
+    setRequestedSubtopic((params.get("subtopic") ?? "").trim().toLowerCase());
+  }, []);
 
   useEffect(() => {
     async function bootstrap() {
       setLoading(true);
-      const [nextCategories, nextPosts] = await Promise.all([getCategories(), getPosts()]);
-      setCategories(nextCategories);
-      setPosts(nextPosts);
+      setLoadError("");
 
-      if (nextCategories[0]) {
-        setSelectedCategory(nextCategories[0].id);
+      try {
+        const [nextCategories, nextPosts] = await Promise.all([getCategories(), getPosts()]);
+        setCategories(nextCategories);
+        setPosts(nextPosts);
+
+        const categoryFromQuery = nextCategories.find((item) => {
+          const slug = item.slug.toLowerCase();
+          const id = item.id.toLowerCase();
+          return requestedCategory ? slug === requestedCategory || id === requestedCategory : false;
+        });
+
+        const defaultCategory = categoryFromQuery ?? nextCategories[0];
+        setSelectedCategory(defaultCategory?.id ?? "");
+      } catch {
+        setCategories([]);
+        setPosts([]);
+        setSelectedCategory("");
+        setSelectedSubtopic("");
+        setLoadError("Unable to load categories/posts from Firebase right now.");
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     }
 
     void bootstrap();
-  }, []);
+  }, [requestedCategory]);
 
   useEffect(() => {
     if (!selectedCategory) {
+      setSubtopics([]);
+      setSelectedSubtopic("");
       return;
     }
 
     async function loadSubtopics() {
-      const nextSubtopics = await getSubtopics(selectedCategory);
-      setSubtopics(nextSubtopics);
-      setSelectedSubtopic(nextSubtopics[0]?.id ?? "");
+      try {
+        const nextSubtopics = await getSubtopics(selectedCategory);
+        setSubtopics(nextSubtopics);
+
+        const subtopicFromQuery = nextSubtopics.find((item) => {
+          const slug = item.slug.toLowerCase();
+          const id = item.id.toLowerCase();
+          return requestedSubtopic ? slug === requestedSubtopic || id === requestedSubtopic : false;
+        });
+
+        setSelectedSubtopic(subtopicFromQuery?.id ?? nextSubtopics[0]?.id ?? "");
+      } catch {
+        setSubtopics([]);
+        setSelectedSubtopic("");
+      }
     }
 
     void loadSubtopics();
-  }, [selectedCategory]);
+  }, [selectedCategory, requestedSubtopic]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -330,6 +374,10 @@ export default function HomePage() {
           <p className="body-txt">All categories are loaded from admin-managed data in Firebase.</p>
 
           {loading ? <p className="muted">Loading categories...</p> : null}
+          {loadError ? <p className="notice">{loadError}</p> : null}
+          {!loading && !loadError && !categories.length ? (
+            <p className="muted">No categories available yet. Add categories from Admin panel.</p>
+          ) : null}
 
           <div className="card-grid">
             {categories.map((category) => (
@@ -356,6 +404,10 @@ export default function HomePage() {
               </button>
             ))}
           </div>
+
+          {selectedCategory && !subtopics.length ? (
+            <p className="muted">No subtopics found for this category yet.</p>
+          ) : null}
         </section>
 
         <section className="section" id="topics">
@@ -399,7 +451,11 @@ export default function HomePage() {
             ))}
           </div>
 
-          {!filteredPosts.length ? <p className="muted">No posts found for this filter.</p> : null}
+          {!posts.length ? (
+            <p className="muted">No published posts yet. Add posts from Admin panel.</p>
+          ) : !filteredPosts.length ? (
+            <p className="muted">No posts found for this filter.</p>
+          ) : null}
         </section>
 
         <section className="section section-accent">
@@ -452,3 +508,15 @@ export default function HomePage() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+

@@ -955,3 +955,138 @@ select {
 .range-grid input[type="range"] {
   width: 100%;
 }
+
+.rich-editor {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.editor-toolbar {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+  padding: 0.6rem;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.editor-toolbar button {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
+  padding: 0.3rem 0.55rem;
+  cursor: pointer;
+  font-size: 0.76rem;
+}
+
+.editor-toolbar button.active {
+  background: var(--orange);
+  color: #fff;
+  border-color: var(--orange);
+}
+
+.editor-surface {
+  min-height: 280px;
+  padding: 0.8rem;
+  line-height: 1.7;
+  outline: none;
+}
+
+.editor-surface:empty::before {
+  content: "Write post content here...";
+  color: var(--text-4);
+}
+
+.editor-surface img,
+.post-html img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+}
+
+.editor-surface video,
+.post-html video {
+  width: 100%;
+  max-height: 460px;
+  border-radius: 8px;
+}
+
+.editor-note {
+  margin: 0;
+  padding: 0.5rem 0.8rem 0.7rem;
+  border-top: 1px solid var(--border);
+  color: var(--text-3);
+  font-size: 0.82rem;
+}
+
+.post-html {
+  margin-bottom: 0.95rem;
+}
+
+.post-html h1,
+.post-html h2,
+.post-html h3,
+.post-html h4,
+.post-html h5,
+.post-html h6 {
+  font-family: var(--fd);
+  margin: 0.8rem 0 0.5rem;
+}
+
+.post-html p,
+.post-html li,
+.post-html blockquote {
+  color: var(--text-2);
+  line-height: 1.8;
+}
+
+.post-html a {
+  color: var(--orange-dim);
+  text-decoration: underline;
+}
+
+.post-html ul,
+.post-html ol {
+  padding-left: 1.2rem;
+}
+
+.post-html blockquote {
+  border-left: 3px solid var(--orange);
+  margin: 0.8rem 0;
+  padding: 0.2rem 0 0.2rem 0.75rem;
+  background: var(--bg-2);
+}
+
+.post-embed,
+.post-html .post-embed {
+  position: relative;
+  width: 100%;
+  padding-top: 56.25%;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #000;
+}
+
+.post-embed iframe,
+.post-html .post-embed iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.post-html pre {
+  margin: 0.7rem 0;
+  padding: 0.8rem;
+  overflow-x: auto;
+  background: #0f1115;
+  color: #f7f7f7;
+  border-radius: 8px;
+}
+
+.post-html code {
+  font-family: var(--fm);
+}

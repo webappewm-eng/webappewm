@@ -95,13 +95,16 @@ export async function getSubtopics(categoryId?: string): Promise<Subtopic[]> {
     return sortByOrder(rows);
   }
 
-  const base = collection(db, "subtopics");
-  const subtopicQuery = categoryId
-    ? query(base, where("categoryId", "==", categoryId), orderBy("order", "asc"))
-    : query(base, orderBy("order", "asc"));
-
-  const snap = await getDocs(subtopicQuery);
-  return snap.docs.map((item) => ({ id: item.id, ...(item.data() as Omit<Subtopic, "id">) }));
+  try {
+    const snap = await getDocs(query(collection(db, "subtopics"), orderBy("order", "asc")));
+    const rows = snap.docs.map((item) => ({ id: item.id, ...(item.data() as Omit<Subtopic, "id">) }));
+    return categoryId ? rows.filter((item) => item.categoryId === categoryId) : rows;
+  } catch {
+    const snap = await getDocs(collection(db, "subtopics"));
+    const rows = snap.docs.map((item) => ({ id: item.id, ...(item.data() as Omit<Subtopic, "id">) }));
+    const filtered = categoryId ? rows.filter((item) => item.categoryId === categoryId) : rows;
+    return sortByOrder(filtered);
+  }
 }
 
 export async function getPosts(filters?: {
@@ -125,20 +128,29 @@ export async function getPosts(filters?: {
     return sortByDateDesc(rows);
   }
 
-  const constraints: QueryConstraint[] = [];
-  if (filters?.categoryId) {
-    constraints.push(where("categoryId", "==", filters.categoryId));
-  }
-  if (filters?.subtopicId) {
-    constraints.push(where("subtopicId", "==", filters.subtopicId));
-  }
-  if (!includeDrafts) {
-    constraints.push(where("isPublished", "==", true));
-  }
-  constraints.push(orderBy("publishedAt", "desc"));
+  const applyFilters = (rows: Post[]): Post[] => {
+    let filtered = [...rows];
+    if (filters?.categoryId) {
+      filtered = filtered.filter((item) => item.categoryId === filters.categoryId);
+    }
+    if (filters?.subtopicId) {
+      filtered = filtered.filter((item) => item.subtopicId === filters.subtopicId);
+    }
+    if (!includeDrafts) {
+      filtered = filtered.filter((item) => item.isPublished);
+    }
+    return sortByDateDesc(filtered);
+  };
 
-  const snap = await getDocs(query(collection(db, "posts"), ...constraints));
-  return snap.docs.map((item) => ({ id: item.id, ...(item.data() as Omit<Post, "id">) }));
+  try {
+    const snap = await getDocs(query(collection(db, "posts"), orderBy("publishedAt", "desc")));
+    const rows = snap.docs.map((item) => ({ id: item.id, ...(item.data() as Omit<Post, "id">) }));
+    return applyFilters(rows);
+  } catch {
+    const snap = await getDocs(collection(db, "posts"));
+    const rows = snap.docs.map((item) => ({ id: item.id, ...(item.data() as Omit<Post, "id">) }));
+    return applyFilters(rows);
+  }
 }
 
 export async function getPostBySlug(slug: string): Promise<Post | null> {
@@ -673,3 +685,4 @@ export async function upsertAdminProfile(uid: string, email: string): Promise<vo
     { merge: true }
   );
 }
+

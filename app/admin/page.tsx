@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
+import { RichPostEditor } from "@/components/editor/RichPostEditor";
 import {
   createCategory,
   createCustomPage,
@@ -110,6 +111,7 @@ export default function AdminPage() {
   const [notificationForm, setNotificationForm] = useState({ title: "", message: "", target: "website" as "website" | "topic", topicId: "" });
 
   const [status, setStatus] = useState("");
+  const [siteOrigin, setSiteOrigin] = useState("");
 
   const refreshAll = useCallback(async () => {
     const [
@@ -176,6 +178,13 @@ export default function AdminPage() {
     }
     void refreshAll();
   }, [profile?.isAdmin, refreshAll]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    setSiteOrigin(window.location.origin);
+  }, []);
 
   const postTitleById = useMemo(() => {
     const map: Record<string, string> = {};
@@ -251,6 +260,12 @@ export default function AdminPage() {
   async function handlePostSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setStatus("");
+
+    const plainContent = postForm.content.replace(/<[^>]+>/g, " ").trim();
+    if (!plainContent) {
+      setStatus("Post content cannot be empty.");
+      return;
+    }
 
     const payload = {
       title: postForm.title,
@@ -420,7 +435,10 @@ export default function AdminPage() {
               <input placeholder="Title" value={postForm.title} onChange={(event) => setPostForm((prev) => ({ ...prev, title: event.target.value }))} required />
               <input placeholder="Slug" value={postForm.slug} onChange={(event) => setPostForm((prev) => ({ ...prev, slug: event.target.value }))} required />
               <textarea rows={2} placeholder="Excerpt" value={postForm.excerpt} onChange={(event) => setPostForm((prev) => ({ ...prev, excerpt: event.target.value }))} required />
-              <textarea rows={8} placeholder="Post content" value={postForm.content} onChange={(event) => setPostForm((prev) => ({ ...prev, content: event.target.value }))} required />
+              <RichPostEditor
+                value={postForm.content}
+                onChange={(value) => setPostForm((prev) => ({ ...prev, content: value }))}
+              />
               <input placeholder="Cover image URL" value={postForm.coverImage} onChange={(event) => setPostForm((prev) => ({ ...prev, coverImage: event.target.value }))} required />
               <input placeholder="Tags (comma separated)" value={postForm.tags} onChange={(event) => setPostForm((prev) => ({ ...prev, tags: event.target.value }))} />
               <select value={postForm.categoryId} onChange={(event) => {
@@ -471,6 +489,45 @@ export default function AdminPage() {
                   </div>
                 </div>
               ))}
+            </div>
+          </section>
+
+          <section className="admin-section admin-card">
+            <h3>Category-wise and Post-wise Links</h3>
+            <p className="muted">Use these links for sharing category pages and individual posts.</p>
+            <div className="table-like">
+              <div className="notice">
+                <strong>Category links</strong>
+                {categories.length ? (
+                  categories.map((item) => {
+                    const path = `/?category=${encodeURIComponent(item.slug)}#categories`;
+                    const href = `${siteOrigin}${path}`;
+                    return (
+                      <p className="muted" key={`category-link-${item.id}`}>
+                        <a className="nav-link" href={href} target="_blank" rel="noreferrer">{href}</a>
+                      </p>
+                    );
+                  })
+                ) : (
+                  <p className="muted">No categories available.</p>
+                )}
+              </div>
+              <div className="notice">
+                <strong>Post links</strong>
+                {posts.length ? (
+                  posts.map((item) => {
+                    const path = `/post/${item.slug}`;
+                    const href = `${siteOrigin}${path}`;
+                    return (
+                      <p className="muted" key={`post-link-${item.id}`}>
+                        <a className="nav-link" href={href} target="_blank" rel="noreferrer">{href}</a>
+                      </p>
+                    );
+                  })
+                ) : (
+                  <p className="muted">No posts available.</p>
+                )}
+              </div>
             </div>
           </section>
 
@@ -594,6 +651,12 @@ export default function AdminPage() {
     </div>
   );
 }
+
+
+
+
+
+
 
 
 

@@ -67,7 +67,32 @@ export default function PostPage() {
       return "";
     }
 
-    const sections = post.content.split(/\n\n+/).filter(Boolean);
+    const content = post.content;
+    const htmlLike = /<\/?[a-z][\s\S]*>/i.test(content);
+
+    if (htmlLike && typeof window !== "undefined") {
+      try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(content, "text/html");
+        const blocks = Array.from(doc.body.childNodes).filter((node) => {
+          if (node.nodeType === Node.TEXT_NODE) {
+            return Boolean(node.textContent?.trim());
+          }
+          return node.nodeType === Node.ELEMENT_NODE;
+        });
+
+        const previewCount = Math.max(1, Math.ceil(blocks.length * 0.2));
+        const container = document.createElement("div");
+        blocks.slice(0, previewCount).forEach((node) => {
+          container.appendChild(node.cloneNode(true));
+        });
+        return container.innerHTML;
+      } catch {
+        return content;
+      }
+    }
+
+    const sections = content.split(/\n\n+/).filter(Boolean);
     const previewCount = Math.max(1, Math.ceil(sections.length * 0.2));
     return sections.slice(0, previewCount).join("\n\n");
   }, [post]);
@@ -312,4 +337,5 @@ export default function PostPage() {
     </div>
   );
 }
+
 

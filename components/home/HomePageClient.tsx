@@ -9,40 +9,57 @@ import { LoginModal } from "@/components/auth/LoginModal";
 import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
 import { NotificationStrip } from "@/components/layout/NotificationStrip";
-import { getCategories, getPosts, getSubtopics } from "@/lib/firebase/data";
-import { Category, Post, Subtopic } from "@/lib/types";
+import { getCategories, getHeroMedia, getPosts, getSiteSettings, getSubtopics } from "@/lib/firebase/data";
+import { Category, HeroMediaItem, Post, Subtopic } from "@/lib/types";
 
-const videoSlides = [
+const fallbackVideoSlides: HeroMediaItem[] = [
   {
     id: "video-1",
+    section: "video",
     title: "Real circuit walkthrough",
-    source: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4"
+    source: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+    order: 1,
+    enabled: true,
+    updatedAt: ""
   },
   {
     id: "video-2",
+    section: "video",
     title: "Hands-on component demo",
-    source: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.webm"
+    source: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.webm",
+    order: 2,
+    enabled: true,
+    updatedAt: ""
   }
 ];
 
-const imageSlides = [
+const fallbackImageSlides: HeroMediaItem[] = [
   {
     id: "img-1",
+    section: "image",
     title: "Build from fundamentals",
-    source:
-      "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=1400&q=80"
+    source: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=1400&q=80",
+    order: 1,
+    enabled: true,
+    updatedAt: ""
   },
   {
     id: "img-2",
+    section: "image",
     title: "Practical electronics learning",
-    source:
-      "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1400&q=80"
+    source: "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1400&q=80",
+    order: 2,
+    enabled: true,
+    updatedAt: ""
   },
   {
     id: "img-3",
+    section: "image",
     title: "From theory to projects",
-    source:
-      "https://images.unsplash.com/photo-1581092919535-7146ff1a5902?auto=format&fit=crop&w=1400&q=80"
+    source: "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1400&q=80",
+    order: 3,
+    enabled: true,
+    updatedAt: ""
   }
 ];
 
@@ -135,6 +152,7 @@ function getSafeImageSrc(value: string | undefined): string {
   }
   return FALLBACK_POST_IMAGE;
 }
+
 interface HomePageClientProps {
   initialCategories: Category[];
   initialSubtopics: Subtopic[];
@@ -170,6 +188,10 @@ export default function HomePageClient({
   const [selectedSubtopic, setSelectedSubtopic] = useState<string>("");
   const [searchText, setSearchText] = useState("");
 
+  const [videoSlides, setVideoSlides] = useState<HeroMediaItem[]>(fallbackVideoSlides);
+  const [imageSlides, setImageSlides] = useState<HeroMediaItem[]>(fallbackImageSlides);
+  const [previewPercent, setPreviewPercent] = useState(20);
+
   const [videoIndex, setVideoIndex] = useState(0);
   const [imageIndex, setImageIndex] = useState(0);
 
@@ -187,15 +209,21 @@ export default function HomePageClient({
   useEffect(() => {
     async function refreshFromFirebase() {
       try {
-        const [nextCategories, nextSubtopics, nextPosts] = await Promise.all([
+        const [nextCategories, nextSubtopics, nextPosts, nextVideoSlides, nextImageSlides, siteSettings] = await Promise.all([
           getCategories(),
           getSubtopics(),
-          getPosts()
+          getPosts(),
+          getHeroMedia("video"),
+          getHeroMedia("image"),
+          getSiteSettings()
         ]);
 
         setCategories(nextCategories);
         setAllSubtopics(nextSubtopics);
         setPosts(nextPosts);
+        setVideoSlides(nextVideoSlides.length ? nextVideoSlides : fallbackVideoSlides);
+        setImageSlides(nextImageSlides.length ? nextImageSlides : fallbackImageSlides);
+        setPreviewPercent(siteSettings.contentPreviewPercent);
         setLoadError("");
 
         setSelectedCategory((prev) => {
@@ -243,14 +271,19 @@ export default function HomePageClient({
 
     setSelectedSubtopic(requested?.id ?? subtopics[0].id);
   }, [selectedCategory, selectedSubtopic, subtopics, normalizedRequestedSubtopic]);
+
   useEffect(() => {
+    if (videoSlides.length <= 1 && imageSlides.length <= 1) {
+      return;
+    }
+
     const timer = window.setInterval(() => {
-      setVideoIndex((prev) => (prev + 1) % videoSlides.length);
-      setImageIndex((prev) => (prev + 1) % imageSlides.length);
+      setVideoIndex((prev) => (videoSlides.length ? (prev + 1) % videoSlides.length : 0));
+      setImageIndex((prev) => (imageSlides.length ? (prev + 1) % imageSlides.length : 0));
     }, 5000);
 
     return () => window.clearInterval(timer);
-  }, []);
+  }, [videoSlides, imageSlides]);
 
   const filteredPosts = useMemo(() => {
     return posts.filter((post) => {
@@ -266,6 +299,9 @@ export default function HomePageClient({
       return matchCategory && matchSubtopic && matchSearch;
     });
   }, [posts, searchText, selectedCategory, selectedSubtopic]);
+
+  const currentVideoSlide = videoSlides[videoIndex] ?? fallbackVideoSlides[0];
+  const currentImageSlide = imageSlides[imageIndex] ?? fallbackImageSlides[0];
 
   return (
     <div className="app-shell">
@@ -314,29 +350,30 @@ export default function HomePageClient({
               <div className="slider-box">
                 <p className="slider-label">Video Slider</p>
                 <div className="slide">
-                  <video
-                    key={videoSlides[videoIndex].id}
-                    src={videoSlides[videoIndex].source}
-                    autoPlay
-                    muted
-                    loop
-                    playsInline
-                  />
-                  <span className="slide-caption">{videoSlides[videoIndex].title}</span>
+                  {currentVideoSlide ? (
+                    <video key={currentVideoSlide.id} src={currentVideoSlide.source} autoPlay muted loop playsInline />
+                  ) : (
+                    <div className="notice">No video media configured yet.</div>
+                  )}
+                  {currentVideoSlide ? <span className="slide-caption">{currentVideoSlide.title}</span> : null}
                 </div>
               </div>
 
               <div className="slider-box">
                 <p className="slider-label">Image Slider</p>
                 <div className="slide">
-                  <Image
-                    key={imageSlides[imageIndex].id}
-                    src={imageSlides[imageIndex].source}
-                    alt={imageSlides[imageIndex].title}
-                    width={1200}
-                    height={800}
-                  />
-                  <span className="slide-caption">{imageSlides[imageIndex].title}</span>
+                  {currentImageSlide ? (
+                    <Image
+                      key={currentImageSlide.id}
+                      src={currentImageSlide.source}
+                      alt={currentImageSlide.title}
+                      width={1200}
+                      height={800}
+                    />
+                  ) : (
+                    <div className="notice">No image media configured yet.</div>
+                  )}
+                  {currentImageSlide ? <span className="slide-caption">{currentImageSlide.title}</span> : null}
                 </div>
               </div>
 
@@ -445,7 +482,7 @@ export default function HomePageClient({
           <div className="label">Topics</div>
           <h2 className="h2">Select a Post</h2>
           <p className="body-txt">
-            Search and open a topic. Users can read the first 20% without login, then a popup will ask for login.
+            Search and open a topic. Users can preview {previewPercent}% without login, then a popup asks for login.
           </p>
 
           <div className="search-row">
@@ -455,17 +492,19 @@ export default function HomePageClient({
               value={searchText}
               onChange={(event) => setSearchText(event.target.value)}
             />
-            <button className="btn btn-outline" type="button" onClick={() => setSearchText("")}>
+            <button className="btn btn-outline" type="button" onClick={() => setSearchText("")}> 
               Clear
             </button>
           </div>
 
           <div className="card-grid">
             {filteredPosts.map((post) => (
-              <article key={post.id} className="post-card">
-                <Image src={getSafeImageSrc(post.coverImage)} alt={post.title} width={1200} height={800} />
-                <h3>{post.title}</h3>
-                <p className="meta">{post.excerpt}</p>
+              <article key={post.id} className="post-card post-card-clickable">
+                <Link href={`/post/${post.slug}`} className="post-card-link">
+                  <Image src={getSafeImageSrc(post.coverImage)} alt={post.title} width={1200} height={800} />
+                  <h3>{post.title}</h3>
+                  <p className="meta">{post.excerpt}</p>
+                </Link>
                 <div className="tag-row">
                   {post.tags.map((tag) => (
                     <span className="tag" key={`${post.id}-${tag}`}>
@@ -539,21 +578,4 @@ export default function HomePageClient({
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

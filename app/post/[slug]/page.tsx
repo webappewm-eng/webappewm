@@ -1,9 +1,11 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { PostPageClient } from "@/components/post/PostPageClient";
-import { getPostBySlug, getPosts } from "@/lib/firebase/data";
+import { getPostBySlug, getPosts, getSiteSettings } from "@/lib/firebase/data";
 import { Post } from "@/lib/types";
 
 export const revalidate = 60;
+export const dynamicParams = true;
 
 async function loadPostData(slug: string): Promise<{ post: Post | null; related: Post[] }> {
   try {
@@ -20,17 +22,65 @@ async function loadPostData(slug: string): Promise<{ post: Post | null; related:
   }
 }
 
+export async function generateStaticParams() {
+  try {
+    const posts = await getPosts();
+    return posts.map((post) => ({ slug: post.slug }));
+  } catch {
+    return [];
+  }
+}
+
+export async function generateMetadata({
+  params
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const post = await getPostBySlug(slug);
+
+  if (!post) {
+    return {
+      title: "Post Not Found"
+    };
+  }
+
+  return {
+    title: post.seoTitle || post.title,
+    description: post.seoDescription || post.excerpt,
+    openGraph: {
+      title: post.seoTitle || post.title,
+      description: post.seoDescription || post.excerpt,
+      images: post.coverImage ? [{ url: post.coverImage }] : undefined,
+      type: "article"
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: post.seoTitle || post.title,
+      description: post.seoDescription || post.excerpt,
+      images: post.coverImage ? [post.coverImage] : undefined
+    }
+  };
+}
+
 export default async function PostPage({
   params
 }: {
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const data = await loadPostData(slug);
+  const [data, settings] = await Promise.all([loadPostData(slug), getSiteSettings()]);
 
   if (!data.post) {
     notFound();
   }
 
-  return <PostPageClient initialPost={data.post} initialRelated={data.related} />;
+  return (
+    <PostPageClient
+      initialPost={data.post}
+      initialRelated={data.related}
+      initialPreviewEnabled={settings.contentPreviewEnabled}
+      initialPreviewPercent={settings.contentPreviewPercent}
+    />
+  );
 }

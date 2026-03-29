@@ -5,13 +5,13 @@ function normalizeName(name: string): string {
   return name.replace(/[^a-zA-Z0-9._-]/g, "-").toLowerCase();
 }
 
-export async function uploadPostImage(file: File): Promise<string> {
+async function uploadFileToPath(file: File, folder: string): Promise<string> {
   if (!storage) {
     throw new Error("Firebase Storage is not configured.");
   }
 
-  const safeName = normalizeName(file.name || "image");
-  const path = `post-images/${Date.now()}-${safeName}`;
+  const safeName = normalizeName(file.name || "file");
+  const path = `${folder}/${Date.now()}-${safeName}`;
   const fileRef = ref(storage, path);
 
   await uploadBytes(fileRef, file, {
@@ -19,4 +19,12 @@ export async function uploadPostImage(file: File): Promise<string> {
   });
 
   return getDownloadURL(fileRef);
+}
+
+export async function uploadPostImage(file: File): Promise<string> {
+  return uploadFileToPath(file, "post-images");
+}
+
+export async function uploadSiteAsset(file: File): Promise<string> {
+  return uploadFileToPath(file, "site-assets");
 }

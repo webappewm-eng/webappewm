@@ -30,6 +30,16 @@ export interface Post {
   publishedAt: string;
 }
 
+export interface HeroMediaItem {
+  id: string;
+  section: "video" | "image";
+  title: string;
+  source: string;
+  order: number;
+  enabled: boolean;
+  updatedAt: string;
+}
+
 export interface Feedback {
   id: string;
   postId: string;
@@ -112,6 +122,22 @@ export interface LivePresence {
 export interface SiteSettings {
   id: string;
   liveTrackingEnabled: boolean;
+  themeMode: "light" | "dark";
+  logoMode: "text" | "image";
+  logoImageUrl: string;
+  logoSize: number;
+  logoTitleLine1: string;
+  logoTitleLine2: string;
+  logoAccentText: string;
+  contentPreviewEnabled: boolean;
+  contentPreviewPercent: number;
+  defaultSeoTitle: string;
+  defaultSeoDescription: string;
+  defaultOgImage: string;
+  siteUrl: string;
+  robotsIndexable: boolean;
+  geminiEnabled: boolean;
+  geminiModel: string;
   notFoundRedirectType: "home" | "custom";
   notFoundRedirectPath: string;
   notFoundButtonLabel: string;

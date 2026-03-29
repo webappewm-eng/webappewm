@@ -21,7 +21,8 @@ import {
   mockSiteSettings,
   mockSubtopics,
   mockThirdPartyScripts,
-  mockNavigationLinks
+  mockNavigationLinks,
+  mockHeroMedia
 } from "@/lib/mock-data";
 import {
   AnalyticsEvent,
@@ -29,6 +30,7 @@ import {
   Category,
   CustomPage,
   Feedback,
+  HeroMediaItem,
   LivePresence,
   NavigationLink,
   NotificationMessage,
@@ -51,7 +53,8 @@ const localStore = {
   notifications: [] as NotificationMessage[],
   analyticsEvents: [] as AnalyticsEvent[],
   livePresence: [] as LivePresence[],
-  siteSettings: { ...mockSiteSettings }
+  siteSettings: { ...mockSiteSettings },
+  heroMedia: [...mockHeroMedia]
 };
 
 function sortByOrder<T extends { order?: number }>(items: T[]): T[] {
@@ -110,14 +113,39 @@ function normalizeRedirectPath(rawPath: unknown): string {
   return value.startsWith("/") ? value : `/${value}`;
 }
 
+function clampNumber(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
 function normalizeSiteSettings(raw: Partial<SiteSettings> | Record<string, unknown>): SiteSettings {
   const redirectType = raw.notFoundRedirectType === "custom" ? "custom" : "home";
   const redirectPath = normalizeRedirectPath(raw.notFoundRedirectPath);
   const buttonLabel = String(raw.notFoundButtonLabel ?? "").trim();
+  const previewPercent = clampNumber(Number(raw.contentPreviewPercent ?? 20) || 20, 5, 95);
+  const logoSize = clampNumber(Number(raw.logoSize ?? 38) || 38, 26, 80);
+  const siteUrl = String(raw.siteUrl ?? "https://webappewm.vercel.app").trim();
 
   return {
     id: String(raw.id ?? "global"),
     liveTrackingEnabled: raw.liveTrackingEnabled !== false,
+    themeMode: raw.themeMode === "dark" ? "dark" : "light",
+    logoMode: raw.logoMode === "image" ? "image" : "text",
+    logoImageUrl: String(raw.logoImageUrl ?? "").trim(),
+    logoSize,
+    logoTitleLine1: String(raw.logoTitleLine1 ?? "Engineer").trim() || "Engineer",
+    logoTitleLine2: String(raw.logoTitleLine2 ?? "With").trim() || "With",
+    logoAccentText: String(raw.logoAccentText ?? "Me").trim() || "Me",
+    contentPreviewEnabled: raw.contentPreviewEnabled !== false,
+    contentPreviewPercent: previewPercent,
+    defaultSeoTitle: String(raw.defaultSeoTitle ?? "Engineer With Me").trim() || "Engineer With Me",
+    defaultSeoDescription:
+      String(raw.defaultSeoDescription ?? "Real Build. Real Code. Real Engineering.").trim() ||
+      "Real Build. Real Code. Real Engineering.",
+    defaultOgImage: String(raw.defaultOgImage ?? "").trim(),
+    siteUrl: /^https?:\/\//i.test(siteUrl) ? siteUrl : "https://webappewm.vercel.app",
+    robotsIndexable: raw.robotsIndexable !== false,
+    geminiEnabled: Boolean(raw.geminiEnabled),
+    geminiModel: String(raw.geminiModel ?? "gemini-1.5-flash").trim() || "gemini-1.5-flash",
     notFoundRedirectType: redirectType,
     notFoundRedirectPath: redirectType === "custom" ? redirectPath : "/",
     notFoundButtonLabel: buttonLabel || (redirectType === "custom" ? "Open Redirect Page" : "Go to Home"),
@@ -208,21 +236,34 @@ export async function getPosts(filters?: {
 }
 
 export async function getPostBySlug(slug: string): Promise<Post | null> {
+  const normalizedSlug = slug.trim().toLowerCase();
+
   if (!hasFirebaseConfig || !db) {
-    const post = localStore.posts.find((item) => item.slug === slug && item.isPublished);
+    const post = localStore.posts.find(
+      (item) => item.isPublished && (item.slug === slug || item.slug.toLowerCase() === normalizedSlug || item.id === slug || item.slug.toLowerCase().startsWith(`${normalizedSlug}-`) || item.slug.toLowerCase().includes(normalizedSlug))
+    );
     return post ?? null;
   }
 
   try {
-    const snap = await getDocs(
+    const exactSnap = await getDocs(
       query(collection(db, "posts"), where("slug", "==", slug), where("isPublished", "==", true))
     );
-    if (snap.empty) {
-      return null;
+    if (!exactSnap.empty) {
+      const row = exactSnap.docs[0];
+      return { id: row.id, ...(row.data() as Omit<Post, "id">) };
     }
 
-    const row = snap.docs[0];
-    return { id: row.id, ...(row.data() as Omit<Post, "id">) };
+    const allPublished = await getPosts();
+    return (
+      allPublished.find(
+        (item) =>
+        item.slug.toLowerCase() === normalizedSlug ||
+        item.id.toLowerCase() === normalizedSlug ||
+        item.slug.toLowerCase().startsWith(`${normalizedSlug}-`) ||
+        item.slug.toLowerCase().includes(normalizedSlug)
+      ) ?? null
+    );
   } catch {
     return null;
   }
@@ -675,6 +716,103 @@ export async function deleteNavigationLink(id: string): Promise<void> {
   await deleteDoc(doc(db, "navigation_links", id));
 }
 
+export async function getHeroMedia(section?: HeroMediaItem["section"]): Promise<HeroMediaItem[]> {
+  const filterRows = (rows: HeroMediaItem[]) => {
+    const enabled = rows.filter((item) => item.enabled);
+    const filtered = section ? enabled.filter((item) => item.section === section) : enabled;
+    return sortByOrder(filtered);
+  };
+
+  if (!hasFirebaseConfig || !db) {
+    return filterRows(localStore.heroMedia);
+  }
+
+  try {
+    const snap = await getDocs(query(collection(db, "hero_media"), orderBy("order", "asc")));
+    const rows = snap.docs.map((item) => {
+      const data = item.data() as Record<string, unknown>;
+      return {
+        id: item.id,
+        section: data.section === "video" ? "video" : "image",
+        title: String(data.title ?? ""),
+        source: String(data.source ?? ""),
+        order: Number(data.order ?? 0),
+        enabled: data.enabled !== false,
+        updatedAt: normalizeDate(data.updatedAt)
+      } as HeroMediaItem;
+    });
+    return filterRows(rows);
+  } catch {
+    return filterRows(localStore.heroMedia);
+  }
+}
+
+export async function getHeroMediaForAdmin(): Promise<HeroMediaItem[]> {
+  if (!hasFirebaseConfig || !db) {
+    return sortByOrder(localStore.heroMedia);
+  }
+
+  try {
+    const snap = await getDocs(query(collection(db, "hero_media"), orderBy("order", "asc")));
+    return snap.docs.map((item) => {
+      const data = item.data() as Record<string, unknown>;
+      return {
+        id: item.id,
+        section: data.section === "video" ? "video" : "image",
+        title: String(data.title ?? ""),
+        source: String(data.source ?? ""),
+        order: Number(data.order ?? 0),
+        enabled: data.enabled !== false,
+        updatedAt: normalizeDate(data.updatedAt)
+      } as HeroMediaItem;
+    });
+  } catch {
+    return sortByOrder(localStore.heroMedia);
+  }
+}
+
+export async function createHeroMedia(input: Omit<HeroMediaItem, "id" | "updatedAt">): Promise<void> {
+  const payload = {
+    ...input,
+    updatedAt: new Date().toISOString()
+  };
+
+  if (!hasFirebaseConfig || !db) {
+    localStore.heroMedia.push({ id: `hero-${Date.now()}`, ...payload });
+    return;
+  }
+
+  await addDoc(collection(db, "hero_media"), {
+    ...payload,
+    updatedAt: serverTimestamp()
+  });
+}
+
+export async function updateHeroMedia(
+  id: string,
+  input: Partial<Omit<HeroMediaItem, "id" | "updatedAt">>
+): Promise<void> {
+  if (!hasFirebaseConfig || !db) {
+    localStore.heroMedia = localStore.heroMedia.map((item) =>
+      item.id === id ? { ...item, ...input, updatedAt: new Date().toISOString() } : item
+    );
+    return;
+  }
+
+  await updateDoc(doc(db, "hero_media", id), {
+    ...input,
+    updatedAt: serverTimestamp()
+  });
+}
+
+export async function deleteHeroMedia(id: string): Promise<void> {
+  if (!hasFirebaseConfig || !db) {
+    localStore.heroMedia = localStore.heroMedia.filter((item) => item.id !== id);
+    return;
+  }
+
+  await deleteDoc(doc(db, "hero_media", id));
+}
 export async function createNotification(input: Omit<NotificationMessage, "id" | "createdAt">): Promise<void> {
   const payload = {
     ...input,
@@ -828,6 +966,59 @@ export async function updateNotFoundSettings(input: {
   );
 }
 
+export async function updateSiteAppearanceSettings(input: {
+  themeMode: SiteSettings["themeMode"];
+  logoMode: SiteSettings["logoMode"];
+  logoImageUrl: string;
+  logoSize: number;
+  logoTitleLine1: string;
+  logoTitleLine2: string;
+  logoAccentText: string;
+  contentPreviewEnabled: boolean;
+  contentPreviewPercent: number;
+  defaultSeoTitle: string;
+  defaultSeoDescription: string;
+  defaultOgImage: string;
+  siteUrl: string;
+  robotsIndexable: boolean;
+  geminiEnabled: boolean;
+  geminiModel: string;
+}): Promise<void> {
+  const normalized = normalizeSiteSettings({ ...localStore.siteSettings, ...input });
+
+  if (!hasFirebaseConfig || !db) {
+    localStore.siteSettings = {
+      ...localStore.siteSettings,
+      ...normalized,
+      updatedAt: new Date().toISOString()
+    };
+    return;
+  }
+
+  await setDoc(
+    doc(db, "site_settings", "global"),
+    {
+      themeMode: normalized.themeMode,
+      logoMode: normalized.logoMode,
+      logoImageUrl: normalized.logoImageUrl,
+      logoSize: normalized.logoSize,
+      logoTitleLine1: normalized.logoTitleLine1,
+      logoTitleLine2: normalized.logoTitleLine2,
+      logoAccentText: normalized.logoAccentText,
+      contentPreviewEnabled: normalized.contentPreviewEnabled,
+      contentPreviewPercent: normalized.contentPreviewPercent,
+      defaultSeoTitle: normalized.defaultSeoTitle,
+      defaultSeoDescription: normalized.defaultSeoDescription,
+      defaultOgImage: normalized.defaultOgImage,
+      siteUrl: normalized.siteUrl,
+      robotsIndexable: normalized.robotsIndexable,
+      geminiEnabled: normalized.geminiEnabled,
+      geminiModel: normalized.geminiModel,
+      updatedAt: serverTimestamp()
+    },
+    { merge: true }
+  );
+}
 export async function getAnalyticsSummary(): Promise<AnalyticsSummary> {
   if (!hasFirebaseConfig || !db) {
     const activeWindowMs = 5 * 60 * 1000;
@@ -898,5 +1089,11 @@ export async function upsertAdminProfile(uid: string, email: string): Promise<vo
     { merge: true }
   );
 }
+
+
+
+
+
+
 
 

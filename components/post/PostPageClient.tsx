@@ -9,12 +9,14 @@ import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
 import { NotificationStrip } from "@/components/layout/NotificationStrip";
 import { ArticleRenderer } from "@/components/post/ArticleRenderer";
-import { saveFeedback, saveSubscription, trackAnalyticsEvent } from "@/lib/firebase/data";
+import { getSiteSettings, saveFeedback, saveSubscription, trackAnalyticsEvent } from "@/lib/firebase/data";
 import { Post } from "@/lib/types";
 
 interface PostPageClientProps {
   initialPost: Post | null;
   initialRelated: Post[];
+  initialPreviewEnabled: boolean;
+  initialPreviewPercent: number;
 }
 
 const FALLBACK_POST_IMAGE = "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80";
@@ -29,20 +31,120 @@ function getSafeImageSrc(value: string | undefined): string {
   }
   return FALLBACK_POST_IMAGE;
 }
-export function PostPageClient({ initialPost, initialRelated }: PostPageClientProps) {
+
+function extractReadableText(content: string): string {
+  const htmlLike = /<\/?[a-z][\s\S]*>/i.test(content);
+
+  if (!htmlLike) {
+    return content.replace(/```[\s\S]*?```/g, " ").replace(/\s+/g, " ").trim();
+  }
+
+  if (typeof window !== "undefined") {
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(content, "text/html");
+      return (doc.body.textContent ?? "").replace(/\s+/g, " ").trim();
+    } catch {
+      return content.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+    }
+  }
+
+  return content.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function buildPreviewContent(content: string, percent: number): string {
+  const cleanText = extractReadableText(content);
+  if (!cleanText) {
+    return "";
+  }
+
+  const safePercent = Math.max(5, Math.min(95, percent || 20));
+  const targetLength = Math.max(120, Math.ceil((cleanText.length * safePercent) / 100));
+  const clippedLength = Math.min(Math.max(targetLength, 1), Math.max(cleanText.length - 1, 1));
+
+  const clipped = cleanText.slice(0, clippedLength).trimEnd();
+  const withHint = `${clipped} ... ... Read more to login.`;
+  return withHint;
+}
+
+function downloadTextFile(filename: string, content: string): void {
+  const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
+function openPrintDialogAsPdf(title: string, content: string): void {
+  const popup = window.open("", "_blank", "width=980,height=760");
+  if (!popup) {
+    return;
+  }
+
+  popup.document.write(`
+    <html>
+      <head>
+        <title>${title}</title>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; padding: 24px; color: #111; }
+          h1 { margin-top: 0; }
+          pre { background: #111; color: #fff; padding: 12px; border-radius: 6px; overflow: auto; }
+        </style>
+      </head>
+      <body>
+        <h1>${title}</h1>
+        <pre>${content.replace(/</g, "&lt;")}</pre>
+      </body>
+    </html>
+  `);
+
+  popup.document.close();
+  popup.focus();
+  popup.print();
+}
+
+export function PostPageClient({
+  initialPost,
+  initialRelated,
+  initialPreviewEnabled,
+  initialPreviewPercent
+}: PostPageClientProps) {
   const { user } = useAuth();
 
   const post = initialPost;
   const related = initialRelated;
   const [loginOpen, setLoginOpen] = useState(false);
 
+  const [previewEnabled, setPreviewEnabled] = useState(initialPreviewEnabled);
+  const [previewPercent, setPreviewPercent] = useState(initialPreviewPercent);
+
   const [feedbackText, setFeedbackText] = useState("");
   const [rating, setRating] = useState("5");
   const [feedbackStatus, setFeedbackStatus] = useState("");
   const [subscribeEmail, setSubscribeEmail] = useState("");
   const [subscribeStatus, setSubscribeStatus] = useState("");
+  const [downloadType, setDownloadType] = useState<"txt" | "pdf">("txt");
 
   const previewTriggerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    async function refreshSettings() {
+      try {
+        const settings = await getSiteSettings();
+        setPreviewEnabled(settings.contentPreviewEnabled);
+        setPreviewPercent(settings.contentPreviewPercent);
+      } catch {
+        setPreviewEnabled(initialPreviewEnabled);
+        setPreviewPercent(initialPreviewPercent);
+      }
+    }
+
+    void refreshSettings();
+  }, [initialPreviewEnabled, initialPreviewPercent]);
 
   useEffect(() => {
     if (!post) {
@@ -60,39 +162,13 @@ export function PostPageClient({ initialPost, initialRelated }: PostPageClientPr
     if (!post) {
       return "";
     }
+    return buildPreviewContent(post.content, previewPercent);
+  }, [post, previewPercent]);
 
-    const content = post.content;
-    const htmlLike = /<\/?[a-z][\s\S]*>/i.test(content);
-
-    if (htmlLike && typeof window !== "undefined") {
-      try {
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(content, "text/html");
-        const blocks = Array.from(doc.body.childNodes).filter((node) => {
-          if (node.nodeType === Node.TEXT_NODE) {
-            return Boolean(node.textContent?.trim());
-          }
-          return node.nodeType === Node.ELEMENT_NODE;
-        });
-
-        const previewCount = Math.max(1, Math.ceil(blocks.length * 0.2));
-        const container = document.createElement("div");
-        blocks.slice(0, previewCount).forEach((node) => {
-          container.appendChild(node.cloneNode(true));
-        });
-        return container.innerHTML;
-      } catch {
-        return content;
-      }
-    }
-
-    const sections = content.split(/\n\n+/).filter(Boolean);
-    const previewCount = Math.max(1, Math.ceil(sections.length * 0.2));
-    return sections.slice(0, previewCount).join("\n\n");
-  }, [post]);
+  const shouldLockContent = Boolean(post && previewEnabled && !user);
 
   useEffect(() => {
-    if (!previewTriggerRef.current || user) {
+    if (!previewTriggerRef.current || !shouldLockContent) {
       return;
     }
 
@@ -104,13 +180,12 @@ export function PostPageClient({ initialPost, initialRelated }: PostPageClientPr
           }
         });
       },
-      { threshold: 0.8 }
+      { threshold: 0.7 }
     );
 
     observer.observe(previewTriggerRef.current);
-
     return () => observer.disconnect();
-  }, [user, previewContent]);
+  }, [shouldLockContent, previewContent]);
 
   async function handleFeedbackSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -166,21 +241,19 @@ export function PostPageClient({ initialPost, initialRelated }: PostPageClientPr
     }
   }
 
-  function handlePdfDownload() {
+  function handleDownload() {
     if (!post) {
       return;
     }
 
-    const blob = new Blob([`${post.title}\n\n${post.content}`], { type: "text/plain;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `${post.slug}.txt`;
-    document.body.appendChild(anchor);
-    anchor.click();
-    document.body.removeChild(anchor);
-    URL.revokeObjectURL(url);
+    const textPayload = `${post.title}\n\n${extractReadableText(post.content)}`;
 
+    if (downloadType === "txt") {
+      downloadTextFile(`${post.slug}.txt`, textPayload);
+      return;
+    }
+
+    openPrintDialogAsPdf(post.title, textPayload);
     void trackAnalyticsEvent({
       type: "pdf_download",
       postId: post.id,
@@ -210,9 +283,17 @@ export function PostPageClient({ initialPost, initialRelated }: PostPageClientPr
                   <div className="label">{post.publishedAt}</div>
                   <h1>{post.title}</h1>
                   <p className="meta">{post.excerpt}</p>
-                  <div className="form-actions" style={{ marginTop: "1rem" }}>
-                    <button type="button" className="btn btn-outline" onClick={handlePdfDownload}>
-                      Download Notes
+                  <div className="download-controls" style={{ marginTop: "1rem" }}>
+                    <select
+                      className="download-select"
+                      value={downloadType}
+                      onChange={(event) => setDownloadType(event.target.value as "txt" | "pdf")}
+                    >
+                      <option value="txt">Download Text (.txt)</option>
+                      <option value="pdf">Download PDF</option>
+                    </select>
+                    <button type="button" className="btn btn-primary" onClick={handleDownload}>
+                      Download
                     </button>
                   </div>
                 </div>
@@ -220,15 +301,15 @@ export function PostPageClient({ initialPost, initialRelated }: PostPageClientPr
 
               <section className="post-content" style={{ marginTop: "1rem" }}>
                 <div className="post-content-inner">
-                  <ArticleRenderer content={user ? post.content : previewContent} />
+                  <ArticleRenderer content={shouldLockContent ? previewContent : post.content} />
                 </div>
 
-                {!user ? (
+                {shouldLockContent ? (
                   <>
                     <div ref={previewTriggerRef} />
                     <div className="locked-overlay">
-                      <h3 style={{ margin: 0, fontFamily: "var(--fd)" }}>20% preview reached</h3>
-                      <p className="meta">Login is required to unlock full post content.</p>
+                      <h3 style={{ margin: 0, fontFamily: "var(--fd)" }}>{previewPercent}% preview reached</h3>
+                      <p className="meta">Read more to login and unlock the full content.</p>
                       <button className="btn btn-primary" onClick={() => setLoginOpen(true)}>
                         Login to Continue
                       </button>
@@ -327,6 +408,3 @@ export function PostPageClient({ initialPost, initialRelated }: PostPageClientPr
     </div>
   );
 }
-
-
-

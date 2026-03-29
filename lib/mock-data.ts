@@ -1,4 +1,13 @@
-import { Category, CustomPage, NavigationLink, Post, SiteSettings, Subtopic, ThirdPartyScript } from "@/lib/types";
+import {
+  Category,
+  CustomPage,
+  HeroMediaItem,
+  NavigationLink,
+  Post,
+  SiteSettings,
+  Subtopic,
+  ThirdPartyScript
+} from "@/lib/types";
 
 export const mockCategories: Category[] = [
   {
@@ -105,6 +114,54 @@ export const mockCustomPages: CustomPage[] = [
   }
 ];
 
+export const mockHeroMedia: HeroMediaItem[] = [
+  {
+    id: "hero-video-1",
+    section: "video",
+    title: "Real circuit walkthrough",
+    source: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
+    order: 1,
+    enabled: true,
+    updatedAt: "2026-03-28"
+  },
+  {
+    id: "hero-video-2",
+    section: "video",
+    title: "Hands-on component demo",
+    source: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.webm",
+    order: 2,
+    enabled: true,
+    updatedAt: "2026-03-28"
+  },
+  {
+    id: "hero-image-1",
+    section: "image",
+    title: "Build from fundamentals",
+    source: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=1400&q=80",
+    order: 1,
+    enabled: true,
+    updatedAt: "2026-03-28"
+  },
+  {
+    id: "hero-image-2",
+    section: "image",
+    title: "Practical electronics learning",
+    source: "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1400&q=80",
+    order: 2,
+    enabled: true,
+    updatedAt: "2026-03-28"
+  },
+  {
+    id: "hero-image-3",
+    section: "image",
+    title: "From theory to projects",
+    source: "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1400&q=80",
+    order: 3,
+    enabled: true,
+    updatedAt: "2026-03-28"
+  }
+];
+
 export const mockThirdPartyScripts: ThirdPartyScript[] = [];
 
 export const mockNavigationLinks: NavigationLink[] = [
@@ -173,8 +230,25 @@ export const mockNavigationLinks: NavigationLink[] = [
 export const mockSiteSettings: SiteSettings = {
   id: "global",
   liveTrackingEnabled: true,
+  themeMode: "light",
+  logoMode: "text",
+  logoImageUrl: "",
+  logoSize: 38,
+  logoTitleLine1: "Engineer",
+  logoTitleLine2: "With",
+  logoAccentText: "Me",
+  contentPreviewEnabled: true,
+  contentPreviewPercent: 20,
+  defaultSeoTitle: "Engineer With Me",
+  defaultSeoDescription: "Real Build. Real Code. Real Engineering.",
+  defaultOgImage: "",
+  siteUrl: "https://webappewm.vercel.app",
+  robotsIndexable: true,
+  geminiEnabled: false,
+  geminiModel: "gemini-1.5-flash",
   notFoundRedirectType: "home",
   notFoundRedirectPath: "/",
   notFoundButtonLabel: "Go to Home",
   updatedAt: "2026-03-28"
 };
+

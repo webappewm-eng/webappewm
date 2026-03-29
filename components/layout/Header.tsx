@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
 import { logoutUser } from "@/lib/firebase/auth";
-import { getNavigationLinks } from "@/lib/firebase/data";
+import { getNavigationLinks, getSiteSettings } from "@/lib/firebase/data";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { NavigationLink } from "@/lib/types";
+import { NavigationLink, SiteSettings } from "@/lib/types";
 
 interface HeaderProps {
   onOpenLogin: () => void;
@@ -46,9 +47,37 @@ const fallbackHeaderLinks: NavigationLink[] = [
   }
 ];
 
-function LinkItem({ item }: { item: NavigationLink }) {
-  const href = item.href;
-  const isPath = href.startsWith("/");
+const fallbackSiteSettings: Pick<
+  SiteSettings,
+  "logoMode" | "logoImageUrl" | "logoSize" | "logoTitleLine1" | "logoTitleLine2" | "logoAccentText"
+> = {
+  logoMode: "text",
+  logoImageUrl: "",
+  logoSize: 38,
+  logoTitleLine1: "Engineer",
+  logoTitleLine2: "With",
+  logoAccentText: "Me"
+};
+
+function isExternalUrl(value: string): boolean {
+  return /^https?:\/\//i.test(value);
+}
+
+function resolveHref(href: string, pathname: string): string {
+  if (href.startsWith("#")) {
+    return pathname === "/" ? href : `/${href}`;
+  }
+
+  if (!href.startsWith("/") && !isExternalUrl(href)) {
+    return `/${href}`;
+  }
+
+  return href;
+}
+
+function LinkItem({ item, pathname }: { item: NavigationLink; pathname: string }) {
+  const href = resolveHref(item.href, pathname);
+  const isPath = href.startsWith("/") || href.startsWith("#");
 
   if (isPath) {
     return (
@@ -72,7 +101,9 @@ function LinkItem({ item }: { item: NavigationLink }) {
 
 export function Header({ onOpenLogin, searchValue = "", onSearchChange }: HeaderProps) {
   const { profile } = useAuth();
+  const pathname = usePathname();
   const [menuLinks, setMenuLinks] = useState<NavigationLink[]>(fallbackHeaderLinks);
+  const [siteSettings, setSiteSettings] = useState(fallbackSiteSettings);
 
   useEffect(() => {
     async function loadLinks() {
@@ -89,23 +120,52 @@ export function Header({ onOpenLogin, searchValue = "", onSearchChange }: Header
     void loadLinks();
   }, []);
 
+  useEffect(() => {
+    async function loadSettings() {
+      try {
+        const settings = await getSiteSettings();
+        setSiteSettings({
+          logoMode: settings.logoMode,
+          logoImageUrl: settings.logoImageUrl,
+          logoSize: settings.logoSize,
+          logoTitleLine1: settings.logoTitleLine1,
+          logoTitleLine2: settings.logoTitleLine2,
+          logoAccentText: settings.logoAccentText
+        });
+      } catch {
+        setSiteSettings(fallbackSiteSettings);
+      }
+    }
+
+    void loadSettings();
+  }, []);
+
+  const logoSizeStyle = useMemo(
+    () => ({ width: `${siteSettings.logoSize}px`, height: `${siteSettings.logoSize}px` }),
+    [siteSettings.logoSize]
+  );
+
   return (
     <header className="nav">
       <Link href="/" className="logo">
-        <div className="logo-mark">
-          <span className="logo-e">E</span>
+        <div className="logo-mark" style={logoSizeStyle}>
+          {siteSettings.logoMode === "image" && siteSettings.logoImageUrl ? (
+            <img className="logo-image" src={siteSettings.logoImageUrl} alt="Site logo" />
+          ) : (
+            <span className="logo-e">E</span>
+          )}
         </div>
         <div className="logo-text">
-          <span className="l1">Engineer</span>
+          <span className="l1">{siteSettings.logoTitleLine1}</span>
           <span className="l2">
-            With <span className="m">Me</span>
+            {siteSettings.logoTitleLine2} <span className="m">{siteSettings.logoAccentText}</span>
           </span>
         </div>
       </Link>
 
       <nav className="nav-links">
         {menuLinks.map((item) => (
-          <LinkItem key={item.id} item={item} />
+          <LinkItem key={item.id} item={item} pathname={pathname} />
         ))}
       </nav>
 

@@ -63,6 +63,11 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /hero_media/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     match /notifications/{docId} {
       allow read: if true;
       allow write: if isAdmin();
@@ -88,3 +93,4 @@ service cloud.firestore {
     }
   }
 }
+

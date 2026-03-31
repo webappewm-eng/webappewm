@@ -1,8 +1,10 @@
-﻿import type { Metadata } from "next";
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { DesignFrame } from "@/components/design/DesignFrame";
 import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
+import { ArticleRenderer } from "@/components/post/ArticleRenderer";
 import { getCustomPageBySlug, getCustomPages } from "@/lib/firebase/data";
 
 interface PageProps {
@@ -45,27 +47,39 @@ export default async function CustomPageRoute({ params }: PageProps) {
     notFound();
   }
 
+  const showHeader = page.showHeader !== false;
+  const showFooter = page.showFooter !== false;
+  const contentMode = page.contentMode === "design" ? "design" : "text";
+
   return (
     <div className="app-shell">
-      <Header />
-      <main className="page-main">
+      {showHeader ? <Header /> : null}
+      <main className={`page-main ${showHeader ? "" : "page-main-no-nav"}`}>
         <div className="page-wrap">
           <p className="breadcrumb">
             <Link href="/">Home</Link> / {page.title}
           </p>
-          <article className="post-content">
-            <div className="post-content-inner">
-              <h1 className="h2">{page.title}</h1>
-              <p className="muted">Updated {new Date(page.updatedAt).toLocaleDateString()}</p>
-              {page.content.split(/\n\n+/).map((paragraph, index) => (
-                <p key={`${page.id}-${index}`}>{paragraph}</p>
-              ))}
-            </div>
-          </article>
+
+          {contentMode === "design" ? (
+            <section className="post-content">
+              <div className="post-content-inner">
+                <h1 className="h2">{page.title}</h1>
+                <p className="muted">Updated {new Date(page.updatedAt).toLocaleDateString()}</p>
+                <DesignFrame html={page.designHtml} css={page.designCss} js={page.designJs} title={page.title} minHeight={620} />
+              </div>
+            </section>
+          ) : (
+            <article className="post-content">
+              <div className="post-content-inner">
+                <h1 className="h2">{page.title}</h1>
+                <p className="muted">Updated {new Date(page.updatedAt).toLocaleDateString()}</p>
+                <ArticleRenderer content={page.content} />
+              </div>
+            </article>
+          )}
         </div>
       </main>
-      <Footer />
+      {showFooter ? <Footer /> : null}
     </div>
   );
 }
-

@@ -1,4 +1,4 @@
-﻿export interface Category {
+export interface Category {
   id: string;
   name: string;
   slug: string;
@@ -22,6 +22,10 @@ export interface Post {
   slug: string;
   excerpt: string;
   content: string;
+  contentMode?: "text" | "design";
+  designHtml?: string;
+  designCss?: string;
+  designJs?: string;
   coverImage: string;
   tags: string[];
   seoTitle?: string;
@@ -68,6 +72,12 @@ export interface CustomPage {
   title: string;
   slug: string;
   content: string;
+  contentMode?: "text" | "design";
+  designHtml?: string;
+  designCss?: string;
+  designJs?: string;
+  showHeader?: boolean;
+  showFooter?: boolean;
   seoTitle?: string;
   seoDescription?: string;
   isPublished: boolean;
@@ -245,6 +255,22 @@ export interface AnalyticsSummary {
   downloads: number;
   shares: number;
   feedbackCount: number;
+}
+
+
+
+
+export interface LandingTopic {
+  id: string;
+  title: string;
+  slug: string;
+  html: string;
+  css: string;
+  js: string;
+  showHeader: boolean;
+  showFooter: boolean;
+  isPublished: boolean;
+  updatedAt: string;
 }
 
 

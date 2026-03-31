@@ -1,9 +1,10 @@
-﻿import {
+import {
   Category,
   CertificateTemplate,
   Course,
   CustomPage,
   HeroMediaItem,
+  LandingTopic,
   NavigationLink,
   Post,
   SiteSettings,
@@ -310,6 +311,11 @@ export const mockSiteSettings: SiteSettings = {
 };
 
 
+
+
+
+
+export const mockLandingTopics: LandingTopic[] = [];
 
 
 

@@ -1,4 +1,4 @@
-﻿@import url("https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Barlow:wght@300;400;500;600&family=Barlow+Condensed:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Barlow:wght@300;400;500;600&family=Barlow+Condensed:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
 
 :root {
   --orange: #ff6b00;
@@ -165,6 +165,10 @@ select {
 .page-main {
   flex: 1;
   padding-top: var(--nav-h);
+}
+
+.page-main-no-nav {
+  padding-top: 0;
 }
 
 .hero {
@@ -1351,10 +1355,18 @@ html[data-theme="dark"] .nav-search::placeholder {
 }
 
 
+ .design-studio iframe {
+  display: block;
+}
+
 .webinar-shortcode-card {
   border-left: 3px solid var(--orange);
   background: linear-gradient(180deg, rgba(255, 107, 0, 0.08), rgba(255, 107, 0, 0.02));
 }
+
+
+
+
 
 
 

@@ -1,4 +1,4 @@
-﻿import {
+import {
   addDoc,
   collection,
   deleteDoc,
@@ -25,7 +25,8 @@ import {
   mockHeroMedia,
   mockWebinars,
   mockCourses,
-  mockCertificateTemplates
+  mockCertificateTemplates,
+  mockLandingTopics
 } from "@/lib/mock-data";
 import {
   AnalyticsEvent,
@@ -48,6 +49,7 @@ import {
   Course,
   UserCourseProgress,
   CertificateTemplate,
+  LandingTopic,
   UserCertificate
 } from "@/lib/types";
 
@@ -70,7 +72,8 @@ const localStore = {
   courses: [...mockCourses],
   courseProgress: [] as UserCourseProgress[],
   certificateTemplates: [...mockCertificateTemplates],
-  certificates: [] as UserCertificate[]
+  certificates: [] as UserCertificate[],
+  landingTopics: [...mockLandingTopics] as LandingTopic[]
 };
 
 function sortByOrder<T extends { order?: number }>(items: T[]): T[] {
@@ -489,6 +492,12 @@ export async function getCustomPages(includeDrafts = false): Promise<CustomPage[
       title: String(data.title ?? ""),
       slug: String(data.slug ?? ""),
       content: String(data.content ?? ""),
+      contentMode: data.contentMode === "design" ? "design" : "text",
+      designHtml: String(data.designHtml ?? ""),
+      designCss: String(data.designCss ?? ""),
+      designJs: String(data.designJs ?? ""),
+      showHeader: data.showHeader !== false,
+      showFooter: data.showFooter !== false,
       seoTitle: String(data.seoTitle ?? ""),
       seoDescription: String(data.seoDescription ?? ""),
       isPublished: Boolean(data.isPublished),
@@ -513,6 +522,12 @@ export async function getCustomPageBySlug(slug: string): Promise<CustomPage | nu
     title: String(data.title ?? ""),
     slug: String(data.slug ?? ""),
     content: String(data.content ?? ""),
+    contentMode: data.contentMode === "design" ? "design" : "text",
+    designHtml: String(data.designHtml ?? ""),
+    designCss: String(data.designCss ?? ""),
+    designJs: String(data.designJs ?? ""),
+    showHeader: data.showHeader !== false,
+    showFooter: data.showFooter !== false,
     seoTitle: String(data.seoTitle ?? ""),
     seoDescription: String(data.seoDescription ?? ""),
     isPublished: Boolean(data.isPublished),
@@ -560,6 +575,108 @@ export async function deleteCustomPage(id: string): Promise<void> {
   await deleteDoc(doc(db, "custom_pages", id));
 }
 
+function mapLandingTopicDoc(data: Record<string, unknown>, id: string): LandingTopic {
+  return {
+    id,
+    title: String(data.title ?? "").trim(),
+    slug: String(data.slug ?? "").trim(),
+    html: String(data.html ?? ""),
+    css: String(data.css ?? ""),
+    js: String(data.js ?? ""),
+    showHeader: data.showHeader !== false,
+    showFooter: data.showFooter !== false,
+    isPublished: Boolean(data.isPublished),
+    updatedAt: normalizeDate(data.updatedAt)
+  };
+}
+
+export async function getLandingTopics(includeDrafts = false): Promise<LandingTopic[]> {
+  if (!hasFirebaseConfig || !db) {
+    const rows = includeDrafts ? localStore.landingTopics : localStore.landingTopics.filter((item) => item.isPublished);
+    return sortByDateDesc(rows);
+  }
+
+  const constraints: QueryConstraint[] = [];
+  if (!includeDrafts) {
+    constraints.push(where("isPublished", "==", true));
+  }
+
+  const snap = await getDocs(query(collection(db, "landing_topics"), ...constraints));
+  const rows = snap.docs.map((item) => mapLandingTopicDoc(item.data() as Record<string, unknown>, item.id));
+  return sortByDateDesc(rows);
+}
+
+export async function getLandingTopicBySlug(slug: string): Promise<LandingTopic | null> {
+  const normalized = slug.trim().toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+
+  if (!hasFirebaseConfig || !db) {
+    return localStore.landingTopics.find((item) => item.slug.toLowerCase() === normalized && item.isPublished) ?? null;
+  }
+
+  const snap = await getDocs(
+    query(collection(db, "landing_topics"), where("slug", "==", normalized), where("isPublished", "==", true))
+  );
+
+  if (snap.empty) {
+    return null;
+  }
+
+  return mapLandingTopicDoc(snap.docs[0].data() as Record<string, unknown>, snap.docs[0].id);
+}
+
+export async function createLandingTopic(
+  input: Omit<LandingTopic, "id" | "updatedAt">
+): Promise<void> {
+  const payload = {
+    ...input,
+    slug: input.slug.trim().toLowerCase(),
+    updatedAt: new Date().toISOString()
+  };
+
+  if (!hasFirebaseConfig || !db) {
+    localStore.landingTopics.unshift({ id: `lt-${Date.now()}`, ...payload });
+    return;
+  }
+
+  await addDoc(collection(db, "landing_topics"), {
+    ...payload,
+    updatedAt: serverTimestamp()
+  });
+}
+
+export async function updateLandingTopic(
+  id: string,
+  input: Partial<Omit<LandingTopic, "id" | "updatedAt">>
+): Promise<void> {
+  const patch: Partial<Omit<LandingTopic, "id" | "updatedAt">> = {
+    ...input,
+    ...(typeof input.slug === "string" ? { slug: input.slug.trim().toLowerCase() } : {})
+  };
+
+  if (!hasFirebaseConfig || !db) {
+    localStore.landingTopics = localStore.landingTopics.map((item) =>
+      item.id === id ? { ...item, ...patch, updatedAt: new Date().toISOString() } : item
+    );
+    return;
+  }
+
+  await updateDoc(doc(db, "landing_topics", id), {
+    ...patch,
+    updatedAt: serverTimestamp()
+  });
+}
+
+export async function deleteLandingTopic(id: string): Promise<void> {
+  if (!hasFirebaseConfig || !db) {
+    localStore.landingTopics = localStore.landingTopics.filter((item) => item.id !== id);
+    return;
+  }
+
+  await deleteDoc(doc(db, "landing_topics", id));
+}
 export async function getThirdPartyScripts(): Promise<ThirdPartyScript[]> {
   if (!hasFirebaseConfig || !db) {
     return sortByDateDesc(localStore.scripts);
@@ -654,51 +771,34 @@ export async function getNavigationLinksForAdmin(): Promise<NavigationLink[]> {
     return sortByOrder(localStore.navigationLinks);
   }
 
+  const mapDoc = (data: Record<string, unknown>, id: string): NavigationLink => ({
+    id,
+    label: String(data.label ?? ""),
+    href: normalizeNavigationHref(data.href),
+    location: data.location === "footer" ? "footer" : "header",
+    order: Number(data.order ?? 0),
+    enabled: data.enabled !== false,
+    openInNewTab: Boolean(data.openInNewTab),
+    parentId: String(data.parentId ?? "").trim(),
+    updatedAt: normalizeDate(data.updatedAt)
+  });
+
   try {
     const snap = await getDocs(query(collection(db, "navigation_links"), orderBy("order", "asc")));
-    return snap.docs.map((item) => {
-      const data = item.data() as Record<string, unknown>;
-      return {
-        id: item.id,
-        label: String(data.label ?? ""),
-        href: normalizeNavigationHref(data.href),
-        location: data.location === "footer" ? "footer" : "header",
-        order: Number(data.order ?? 0),
-        enabled: data.enabled !== false,
-        openInNewTab: Boolean(data.openInNewTab),
-        parentId: sanitizeString(data.parentId),
-        updatedAt: normalizeDate(data.updatedAt)
-      };
-    });
+    return sortByOrder(snap.docs.map((item) => mapDoc(item.data() as Record<string, unknown>, item.id)));
   } catch {
     const snap = await getDocs(collection(db, "navigation_links"));
-    const rows = snap.docs.map((item) => {
-      const data = item.data() as Record<string, unknown>;
-      return {
-        id: item.id,
-        label: String(data.label ?? ""),
-        href: normalizeNavigationHref(data.href),
-        location: data.location === "footer" ? "footer" : "header",
-        order: Number(data.order ?? 0),
-        enabled: data.enabled !== false,
-        openInNewTab: Boolean(data.openInNewTab),
-        parentId: sanitizeString(data.parentId),
-        updatedAt: normalizeDate(data.updatedAt)
-      } as NavigationLink;
-    });
-    return sortByOrder(rows);
+    return sortByOrder(snap.docs.map((item) => mapDoc(item.data() as Record<string, unknown>, item.id)));
   }
 }
-
 export async function createNavigationLink(input: Omit<NavigationLink, "id" | "updatedAt">): Promise<void> {
-  const payload = {
+  const payload: Omit<NavigationLink, "id" | "updatedAt"> = {
     ...input,
-    href: normalizeNavigationHref(input.href),
-    updatedAt: new Date().toISOString()
+    href: normalizeNavigationHref(input.href)
   };
 
   if (!hasFirebaseConfig || !db) {
-    localStore.navigationLinks.push({ id: `nav-${Date.now()}`, ...payload });
+    localStore.navigationLinks.push({ id: `nav-${Date.now()}`, ...payload, updatedAt: new Date().toISOString() });
     return;
   }
 
@@ -707,7 +807,6 @@ export async function createNavigationLink(input: Omit<NavigationLink, "id" | "u
     updatedAt: serverTimestamp()
   });
 }
-
 export async function updateNavigationLink(
   id: string,
   input: Partial<Omit<NavigationLink, "id" | "updatedAt">>
@@ -781,42 +880,35 @@ export async function getHeroMediaForAdmin(): Promise<HeroMediaItem[]> {
     return sortByOrder(localStore.heroMedia);
   }
 
+  const mapDoc = (data: Record<string, unknown>, id: string): HeroMediaItem => ({
+    id,
+    section: data.section === "video" ? "video" : "image",
+    title: String(data.title ?? ""),
+    source: String(data.source ?? ""),
+    order: Number(data.order ?? 0),
+    enabled: data.enabled !== false,
+    updatedAt: normalizeDate(data.updatedAt)
+  });
+
   try {
     const snap = await getDocs(query(collection(db, "hero_media"), orderBy("order", "asc")));
-    return snap.docs.map((item) => {
-      const data = item.data() as Record<string, unknown>;
-      return {
-        id: item.id,
-        section: data.section === "video" ? "video" : "image",
-        title: String(data.title ?? ""),
-        source: String(data.source ?? ""),
-        order: Number(data.order ?? 0),
-        enabled: data.enabled !== false,
-        updatedAt: normalizeDate(data.updatedAt)
-      } as HeroMediaItem;
-    });
+    return sortByOrder(snap.docs.map((item) => mapDoc(item.data() as Record<string, unknown>, item.id)));
   } catch {
-    return sortByOrder(localStore.heroMedia);
+    const snap = await getDocs(collection(db, "hero_media"));
+    return sortByOrder(snap.docs.map((item) => mapDoc(item.data() as Record<string, unknown>, item.id)));
   }
 }
-
 export async function createHeroMedia(input: Omit<HeroMediaItem, "id" | "updatedAt">): Promise<void> {
-  const payload = {
-    ...input,
-    updatedAt: new Date().toISOString()
-  };
-
   if (!hasFirebaseConfig || !db) {
-    localStore.heroMedia.push({ id: `hero-${Date.now()}`, ...payload });
+    localStore.heroMedia.push({ id: `hero-${Date.now()}`, ...input, updatedAt: new Date().toISOString() });
     return;
   }
 
   await addDoc(collection(db, "hero_media"), {
-    ...payload,
+    ...input,
     updatedAt: serverTimestamp()
   });
 }
-
 export async function updateHeroMedia(
   id: string,
   input: Partial<Omit<HeroMediaItem, "id" | "updatedAt">>
@@ -1707,6 +1799,20 @@ export async function getCertificateById(certificateId: string): Promise<UserCer
     certificateNumber: sanitizeString(data.certificateNumber)
   } as UserCertificate;
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

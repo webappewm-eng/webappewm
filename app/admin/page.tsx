@@ -1,10 +1,11 @@
-﻿"use client";
+"use client";
 
 import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
 import { RichPostEditor } from "@/components/editor/RichPostEditor";
+import { DesignStudio } from "@/components/editor/DesignStudio";
 import { uploadPostImage, uploadSiteAsset } from "@/lib/firebase/storage";
 import {
   createCategory,
@@ -18,6 +19,7 @@ import {
   createWebinar,
   createCourse,
   createCertificateTemplate,
+  createLandingTopic,
   deleteCategory,
   deleteCustomPage,
   deleteHeroMedia,
@@ -28,6 +30,7 @@ import {
   deleteWebinar,
   deleteCourse,
   deleteCertificateTemplate,
+  deleteLandingTopic,
   getAnalyticsSummary,
   getCategories,
   getCustomPages,
@@ -46,6 +49,7 @@ import {
   getCourseProgressForAdmin,
   getCertificateTemplates,
   getCertificatesForAdmin,
+  getLandingTopics,
   listSubscriptions,
   updateCategory,
   updateCustomPage,
@@ -59,7 +63,8 @@ import {
   updateThirdPartyScript,
   updateWebinar,
   updateCourse,
-  updateCertificateTemplate
+  updateCertificateTemplate,
+  updateLandingTopic
 } from "@/lib/firebase/data";
 import {
   AnalyticsSummary,
@@ -80,13 +85,18 @@ import {
   Course,
   UserCourseProgress,
   CertificateTemplate,
+  LandingTopic,
   UserCertificate
 } from "@/lib/types";
 const emptyPostForm = {
   title: "",
   slug: "",
   excerpt: "",
+  contentMode: "text" as "text" | "design",
   content: "",
+  designHtml: "",
+  designCss: "",
+  designJs: "",
   coverImage: "",
   categoryId: "",
   subtopicId: "",
@@ -100,7 +110,13 @@ const emptyPostForm = {
 const emptyPageForm = {
   title: "",
   slug: "",
+  contentMode: "text" as "text" | "design",
   content: "",
+  designHtml: "",
+  designCss: "",
+  designJs: "",
+  showHeader: true,
+  showFooter: true,
   seoTitle: "",
   seoDescription: "",
   isPublished: true
@@ -136,6 +152,17 @@ const emptyTemplateForm = {
   backgroundImage: "",
   signatureImage: "",
   enabled: true
+};
+
+const emptyLandingTopicForm = {
+  title: "",
+  slug: "",
+  html: "",
+  css: "",
+  js: "",
+  showHeader: true,
+  showFooter: true,
+  isPublished: true
 };
 
 function slugify(value: string): string {
@@ -199,6 +226,17 @@ function questionsToInput(questions: Course["questions"]): string {
     .join("\n");
 }
 
+type AdminTabKey = "general" | "category" | "topics" | "posts" | "seo" | "learning" | "engagement";
+
+const adminTabs: { key: AdminTabKey; label: string }[] = [
+  { key: "general", label: "General" },
+  { key: "seo", label: "SEO & Settings" },
+  { key: "category", label: "Categories" },
+  { key: "topics", label: "Topics" },
+  { key: "posts", label: "Posts & Pages" },
+  { key: "learning", label: "Learning" },
+  { key: "engagement", label: "Engagement" }
+];
 export default function AdminPage() {
   const { profile, loading } = useAuth();
 
@@ -207,6 +245,7 @@ export default function AdminPage() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [feedback, setFeedback] = useState<Feedback[]>([]);
   const [pages, setPages] = useState<CustomPage[]>([]);
+  const [landingTopics, setLandingTopics] = useState<LandingTopic[]>([]);
   const [scripts, setScripts] = useState<ThirdPartyScript[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [notifications, setNotifications] = useState<NotificationMessage[]>([]);
@@ -263,6 +302,9 @@ export default function AdminPage() {
 
   const [pageForm, setPageForm] = useState(emptyPageForm);
   const [pageEditingId, setPageEditingId] = useState("");
+
+  const [landingTopicForm, setLandingTopicForm] = useState(emptyLandingTopicForm);
+  const [landingTopicEditingId, setLandingTopicEditingId] = useState("");
 
   const [scriptForm, setScriptForm] = useState({ name: "", src: "", location: "body" as "head" | "body" });
   const [heroMedia, setHeroMedia] = useState<HeroMediaItem[]>([]);
@@ -329,6 +371,11 @@ export default function AdminPage() {
   const [uploadStatus, setUploadStatus] = useState("");
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiBusy, setAiBusy] = useState(false);
+  const [activeTab, setActiveTab] = useState<AdminTabKey>("general");
+
+  function isTabActive(tab: AdminTabKey): boolean {
+    return activeTab === tab;
+  }
 
   const refreshAll = useCallback(async () => {
     const [
@@ -337,6 +384,7 @@ export default function AdminPage() {
       nextPosts,
       nextFeedback,
       nextPages,
+      nextLandingTopics,
       nextScripts,
       nextHeroMedia,
       nextSubscriptions,
@@ -357,6 +405,7 @@ export default function AdminPage() {
       getPosts({ includeDrafts: true }),
       getFeedback(),
       getCustomPages(true),
+      getLandingTopics(true),
       getThirdPartyScripts(),
       getHeroMediaForAdmin(),
       listSubscriptions(),
@@ -378,6 +427,7 @@ export default function AdminPage() {
     setPosts(nextPosts);
     setFeedback(nextFeedback);
     setPages(nextPages);
+    setLandingTopics(nextLandingTopics);
     setScripts(nextScripts);
     setHeroMedia(nextHeroMedia);
     setSubscriptions(nextSubscriptions);
@@ -594,17 +644,29 @@ export default function AdminPage() {
     event.preventDefault();
     setStatus("");
 
-    const plainContent = postForm.content.replace(/<[^>]+>/g, " ").trim();
-    if (!plainContent) {
-      setStatus("Post content cannot be empty.");
-      return;
+    if (postForm.contentMode === "text") {
+      const plainContent = postForm.content.replace(/<[^>]+>/g, " ").trim();
+      if (!plainContent) {
+        setStatus("Post content cannot be empty.");
+        return;
+      }
+    } else {
+      const hasDesign = Boolean(postForm.designHtml.trim() || postForm.designCss.trim() || postForm.designJs.trim());
+      if (!hasDesign) {
+        setStatus("Design mode needs at least HTML, CSS, or JS.");
+        return;
+      }
     }
 
     const payload = {
       title: postForm.title,
       slug: slugify(postForm.slug || postForm.title),
       excerpt: postForm.excerpt,
+      contentMode: postForm.contentMode,
       content: postForm.content,
+      designHtml: postForm.designHtml,
+      designCss: postForm.designCss,
+      designJs: postForm.designJs,
       coverImage: postForm.coverImage,
       categoryId: postForm.categoryId,
       subtopicId: postForm.subtopicId,
@@ -628,15 +690,32 @@ export default function AdminPage() {
     setPostEditingId("");
     await refreshAll();
   }
-
   async function handlePageSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
+    if (pageForm.contentMode === "text") {
+      if (!pageForm.content.replace(/<[^>]+>/g, " ").trim()) {
+        setStatus("Page content cannot be empty.");
+        return;
+      }
+    } else {
+      const hasDesign = Boolean(pageForm.designHtml.trim() || pageForm.designCss.trim() || pageForm.designJs.trim());
+      if (!hasDesign) {
+        setStatus("Design mode needs at least HTML, CSS, or JS.");
+        return;
+      }
+    }
+
+    const payload = {
+      ...pageForm,
+      slug: slugify(pageForm.slug || pageForm.title)
+    };
+
     if (pageEditingId) {
-      await updateCustomPage(pageEditingId, { ...pageForm, slug: slugify(pageForm.slug || pageForm.title) });
+      await updateCustomPage(pageEditingId, payload);
       setStatus("Custom page updated.");
     } else {
-      await createCustomPage({ ...pageForm, slug: slugify(pageForm.slug || pageForm.title) });
+      await createCustomPage(payload);
       setStatus("Custom page created.");
     }
 
@@ -645,6 +724,42 @@ export default function AdminPage() {
     await refreshAll();
   }
 
+  async function handleLandingTopicSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const payload = {
+      title: landingTopicForm.title.trim(),
+      slug: slugify(landingTopicForm.slug || landingTopicForm.title),
+      html: landingTopicForm.html,
+      css: landingTopicForm.css,
+      js: landingTopicForm.js,
+      showHeader: landingTopicForm.showHeader,
+      showFooter: landingTopicForm.showFooter,
+      isPublished: landingTopicForm.isPublished
+    };
+
+    if (!payload.title || !payload.slug) {
+      setStatus("Landing topic title and slug are required.");
+      return;
+    }
+
+    if (!payload.html.trim() && !payload.css.trim() && !payload.js.trim()) {
+      setStatus("Add HTML/CSS/JS to publish a landing topic.");
+      return;
+    }
+
+    if (landingTopicEditingId) {
+      await updateLandingTopic(landingTopicEditingId, payload);
+      setStatus("Landing topic updated.");
+    } else {
+      await createLandingTopic(payload);
+      setStatus("Landing topic created.");
+    }
+
+    setLandingTopicForm(emptyLandingTopicForm);
+    setLandingTopicEditingId("");
+    await refreshAll();
+  }
   async function handleScriptSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -1096,7 +1211,20 @@ export default function AdminPage() {
           <p className="body-txt">Only admins can create or update content. Users can submit only feedback.</p>
           {status ? <div className="notice">{status}</div> : null}
 
-          <section className="admin-section admin-card">
+          <div className="tab-row" role="tablist" aria-label="Admin sections">
+            {adminTabs.map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                className={`tab ${isTabActive(tab.key) ? "active" : ""}`}
+                onClick={() => setActiveTab(tab.key)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          <section className="admin-section admin-card" hidden={!isTabActive("general")}>
             <h3>Analytics Dashboard</h3>
             <div className="admin-grid">
               <div className="notice"><strong>Active users:</strong> {analytics.activeUsers}</div>
@@ -1121,7 +1249,7 @@ export default function AdminPage() {
             </div>
           </section>
 
-          <section className="admin-section admin-card">
+          <section className="admin-section admin-card" hidden={!isTabActive("seo")}>
             <h3>Theme, Logo, Preview and SEO Settings</h3>
             <p className="muted">Manage dark mode, global page side gap, logo, preview gate, Gemini helper and SEO defaults.</p>
             <form className="form-grid" onSubmit={handleAppearanceSubmit}>
@@ -1257,7 +1385,7 @@ export default function AdminPage() {
             </div>
           </section>
 
-          <section className="admin-section admin-card">
+          <section className="admin-section admin-card" hidden={!isTabActive("general")}>
             <h3>Hero Slider Media (Image and Video)</h3>
             <form className="form-grid" onSubmit={handleHeroMediaSubmit}>
               <select
@@ -1358,7 +1486,7 @@ export default function AdminPage() {
             </div>
           </section>
 
-          <section className="admin-section admin-card">
+          <section className="admin-section admin-card" hidden={!isTabActive("seo")}>
             <h3>404 Redirect Settings</h3>
             <p className="muted">Configure where users should go from invalid URLs.</p>
             <form className="form-grid" onSubmit={handleNotFoundSettingsSubmit}>
@@ -1403,7 +1531,7 @@ export default function AdminPage() {
               Current target: {settings.notFoundRedirectType === "custom" ? settings.notFoundRedirectPath : "/"}
             </div>
           </section>
-          <section className="admin-section admin-card">
+          <section className="admin-section admin-card" hidden={!isTabActive("general")}>
             <h3>Menu and Footer Links</h3>
             <p className="muted">Create links for header menu and footer pages list.</p>
             <form className="form-grid" onSubmit={handleNavigationLinkSubmit}>
@@ -1534,7 +1662,7 @@ export default function AdminPage() {
             </div>
           </section>
 
-          <section className="admin-section admin-card">
+          <section className="admin-section admin-card" hidden={!isTabActive("category")}>
             <h3>Category Management</h3>
             <form className="form-grid" onSubmit={handleCategorySubmit}>
               <input placeholder="Category name" value={categoryForm.name} onChange={(event) => setCategoryForm((prev) => ({ ...prev, name: event.target.value }))} required />
@@ -1559,7 +1687,7 @@ export default function AdminPage() {
             </div>
           </section>
 
-          <section className="admin-section admin-card">
+          <section className="admin-section admin-card" hidden={!isTabActive("topics")}>
             <h3>Subtopic Management</h3>
             <form className="form-grid" onSubmit={handleSubtopicSubmit}>
               <select value={subtopicForm.categoryId} onChange={(event) => setSubtopicForm((prev) => ({ ...prev, categoryId: event.target.value }))}>
@@ -1588,7 +1716,7 @@ export default function AdminPage() {
             </div>
           </section>
 
-          <section className="admin-section admin-card">
+          <section className="admin-section admin-card" hidden={!isTabActive("posts")}>
             <h3>Post Management (SEO included)</h3>
             <div className="notice" style={{ marginBottom: "0.9rem" }}>
               <strong>Gemini AI Assistant</strong>
@@ -1609,10 +1737,29 @@ export default function AdminPage() {
               <input placeholder="Title" value={postForm.title} onChange={(event) => setPostForm((prev) => ({ ...prev, title: event.target.value }))} required />
               <input placeholder="Slug" value={postForm.slug} onChange={(event) => setPostForm((prev) => ({ ...prev, slug: event.target.value }))} required />
               <textarea rows={2} placeholder="Excerpt" value={postForm.excerpt} onChange={(event) => setPostForm((prev) => ({ ...prev, excerpt: event.target.value }))} required />
-              <RichPostEditor
-                value={postForm.content}
-                onChange={(value) => setPostForm((prev) => ({ ...prev, content: value }))}
-              />
+              <select
+                value={postForm.contentMode}
+                onChange={(event) => setPostForm((prev) => ({ ...prev, contentMode: event.target.value as "text" | "design" }))}
+              >
+                <option value="text">Text Editor</option>
+                <option value="design">HTML/CSS/JS Design</option>
+              </select>
+              {postForm.contentMode === "text" ? (
+                <RichPostEditor
+                  value={postForm.content}
+                  onChange={(value) => setPostForm((prev) => ({ ...prev, content: value }))}
+                />
+              ) : (
+                <DesignStudio
+                  title="Post Design Studio"
+                  htmlCode={postForm.designHtml}
+                  cssCode={postForm.designCss}
+                  jsCode={postForm.designJs}
+                  onHtmlCodeChange={(value) => setPostForm((prev) => ({ ...prev, designHtml: value }))}
+                  onCssCodeChange={(value) => setPostForm((prev) => ({ ...prev, designCss: value }))}
+                  onJsCodeChange={(value) => setPostForm((prev) => ({ ...prev, designJs: value }))}
+                />
+              )}
               <input placeholder="Cover image URL" value={postForm.coverImage} onChange={(event) => setPostForm((prev) => ({ ...prev, coverImage: event.target.value }))} required />
               <input type="file" accept="image/*" onChange={handleCoverImageUpload} />
               {uploadingImage ? <p className="muted">Uploading image...</p> : null}
@@ -1651,7 +1798,11 @@ export default function AdminPage() {
                         title: item.title,
                         slug: item.slug,
                         excerpt: item.excerpt,
+                        contentMode: item.contentMode === "design" ? "design" : "text",
                         content: item.content,
+                        designHtml: item.designHtml ?? "",
+                        designCss: item.designCss ?? "",
+                        designJs: item.designJs ?? "",
                         coverImage: item.coverImage,
                         categoryId: item.categoryId,
                         subtopicId: item.subtopicId,
@@ -1668,7 +1819,7 @@ export default function AdminPage() {
               ))}
             </div>
           </section>
-          <section className="admin-section admin-card">
+          <section className="admin-section admin-card" hidden={!isTabActive("learning")}>
             <h3>Webinar Management</h3>
             <p className="muted">Create webinars, generate shortcode automatically, and track registrations.</p>
             <form className="form-grid" onSubmit={handleWebinarSubmit}>
@@ -1812,7 +1963,7 @@ export default function AdminPage() {
             </div>
           </section>
 
-          <section className="admin-section admin-card">
+          <section className="admin-section admin-card" hidden={!isTabActive("learning")}>
             <h3>Course and Certification Management</h3>
             <p className="muted">
               Lessons format: <code>Lesson title::Lesson content</code> per line. Questions format:
@@ -1953,7 +2104,7 @@ export default function AdminPage() {
             </div>
           </section>
 
-          <section className="admin-section admin-card">
+          <section className="admin-section admin-card" hidden={!isTabActive("learning")}>
             <h3>Certificate Templates and Signature</h3>
             <form className="form-grid" onSubmit={handleTemplateSubmit}>
               <input
@@ -2041,7 +2192,7 @@ export default function AdminPage() {
             </div>
           </section>
 
-          <section className="admin-section admin-card">
+          <section className="admin-section admin-card" hidden={!isTabActive("learning")}>
             <h3>Webinar, Course Progress and Certificate Analytics</h3>
             <div className="table-like">
               <div className="notice">
@@ -2083,7 +2234,7 @@ export default function AdminPage() {
             </div>
           </section>
 
-          <section className="admin-section admin-card">
+          <section className="admin-section admin-card" hidden={!isTabActive("general")}>
             <h3>Category-wise and Post-wise Links</h3>
             <p className="muted">Use these links for sharing category pages and individual posts.</p>
             <div className="table-like">
@@ -2122,12 +2273,33 @@ export default function AdminPage() {
             </div>
           </section>
 
-          <section className="admin-section admin-card">
+          <section className="admin-section admin-card" hidden={!isTabActive("posts")}>
             <h3>Custom Page Management</h3>
             <form className="form-grid" onSubmit={handlePageSubmit}>
               <input placeholder="Page title" value={pageForm.title} onChange={(event) => setPageForm((prev) => ({ ...prev, title: event.target.value }))} required />
               <input placeholder="Page slug" value={pageForm.slug} onChange={(event) => setPageForm((prev) => ({ ...prev, slug: event.target.value }))} required />
-              <textarea rows={7} placeholder="Page content" value={pageForm.content} onChange={(event) => setPageForm((prev) => ({ ...prev, content: event.target.value }))} required />
+              <select
+                value={pageForm.contentMode}
+                onChange={(event) => setPageForm((prev) => ({ ...prev, contentMode: event.target.value as "text" | "design" }))}
+              >
+                <option value="text">Text Content</option>
+                <option value="design">HTML/CSS/JS Design</option>
+              </select>
+              {pageForm.contentMode === "text" ? (
+                <textarea rows={7} placeholder="Page content" value={pageForm.content} onChange={(event) => setPageForm((prev) => ({ ...prev, content: event.target.value }))} required />
+              ) : (
+                <DesignStudio
+                  title="Page Design Studio"
+                  htmlCode={pageForm.designHtml}
+                  cssCode={pageForm.designCss}
+                  jsCode={pageForm.designJs}
+                  onHtmlCodeChange={(value) => setPageForm((prev) => ({ ...prev, designHtml: value }))}
+                  onCssCodeChange={(value) => setPageForm((prev) => ({ ...prev, designCss: value }))}
+                  onJsCodeChange={(value) => setPageForm((prev) => ({ ...prev, designJs: value }))}
+                />
+              )}
+              <label><input type="checkbox" checked={pageForm.showHeader} onChange={(event) => setPageForm((prev) => ({ ...prev, showHeader: event.target.checked }))} /> Show header</label>
+              <label><input type="checkbox" checked={pageForm.showFooter} onChange={(event) => setPageForm((prev) => ({ ...prev, showFooter: event.target.checked }))} /> Show footer</label>
               <input placeholder="SEO title" value={pageForm.seoTitle} onChange={(event) => setPageForm((prev) => ({ ...prev, seoTitle: event.target.value }))} />
               <textarea rows={2} placeholder="SEO description" value={pageForm.seoDescription} onChange={(event) => setPageForm((prev) => ({ ...prev, seoDescription: event.target.value }))} />
               <label><input type="checkbox" checked={pageForm.isPublished} onChange={(event) => setPageForm((prev) => ({ ...prev, isPublished: event.target.checked }))} /> Publish page</label>
@@ -2140,14 +2312,20 @@ export default function AdminPage() {
               {pages.map((item) => (
                 <div className="notice" key={item.id}>
                   <strong>{item.title}</strong> <span className="muted">(/pages/{item.slug})</span>
-                  <p className="muted">{item.isPublished ? "Published" : "Draft"}</p>
+                  <p className="muted">{item.isPublished ? "Published" : "Draft"} | {item.contentMode === "design" ? "Design" : "Text"}</p>
                   <div className="form-actions">
                     <button className="btn btn-outline" type="button" onClick={() => {
                       setPageEditingId(item.id);
                       setPageForm({
                         title: item.title,
                         slug: item.slug,
+                        contentMode: item.contentMode === "design" ? "design" : "text",
                         content: item.content,
+                        designHtml: item.designHtml ?? "",
+                        designCss: item.designCss ?? "",
+                        designJs: item.designJs ?? "",
+                        showHeader: item.showHeader !== false,
+                        showFooter: item.showFooter !== false,
                         seoTitle: item.seoTitle ?? "",
                         seoDescription: item.seoDescription ?? "",
                         isPublished: item.isPublished
@@ -2160,7 +2338,93 @@ export default function AdminPage() {
             </div>
           </section>
 
-          <section className="admin-section admin-card">
+          <section className="admin-section admin-card" hidden={!isTabActive("topics")}>
+            <h3>Landing Topic Builder</h3>
+            <p className="muted">Create unlimited topic landing pages with custom slug, header/footer toggle, import files/folder/zip, and live preview before publishing.</p>
+            <form className="form-grid" onSubmit={handleLandingTopicSubmit}>
+              <input
+                placeholder="Landing topic title"
+                value={landingTopicForm.title}
+                onChange={(event) => setLandingTopicForm((prev) => ({ ...prev, title: event.target.value }))}
+                required
+              />
+              <input
+                placeholder="Landing topic slug"
+                value={landingTopicForm.slug}
+                onChange={(event) => setLandingTopicForm((prev) => ({ ...prev, slug: event.target.value }))}
+                required
+              />
+              <label><input type="checkbox" checked={landingTopicForm.showHeader} onChange={(event) => setLandingTopicForm((prev) => ({ ...prev, showHeader: event.target.checked }))} /> Show header</label>
+              <label><input type="checkbox" checked={landingTopicForm.showFooter} onChange={(event) => setLandingTopicForm((prev) => ({ ...prev, showFooter: event.target.checked }))} /> Show footer</label>
+              <label><input type="checkbox" checked={landingTopicForm.isPublished} onChange={(event) => setLandingTopicForm((prev) => ({ ...prev, isPublished: event.target.checked }))} /> Publish landing topic</label>
+              <DesignStudio
+                title="Landing Topic Design Studio"
+                htmlCode={landingTopicForm.html}
+                cssCode={landingTopicForm.css}
+                jsCode={landingTopicForm.js}
+                onHtmlCodeChange={(value) => setLandingTopicForm((prev) => ({ ...prev, html: value }))}
+                onCssCodeChange={(value) => setLandingTopicForm((prev) => ({ ...prev, css: value }))}
+                onJsCodeChange={(value) => setLandingTopicForm((prev) => ({ ...prev, js: value }))}
+              />
+              <div className="form-actions">
+                <button className="btn btn-primary" type="submit">
+                  {landingTopicEditingId ? "Update Landing Topic" : "Create Landing Topic"}
+                </button>
+                {landingTopicEditingId ? (
+                  <button
+                    className="btn btn-outline"
+                    type="button"
+                    onClick={() => {
+                      setLandingTopicEditingId("");
+                      setLandingTopicForm(emptyLandingTopicForm);
+                    }}
+                  >
+                    Cancel Edit
+                  </button>
+                ) : null}
+              </div>
+            </form>
+            <div className="table-like">
+              {landingTopics.length ? (
+                landingTopics.map((item) => (
+                  <article className="notice" key={`landing-topic-${item.id}`}>
+                    <strong>{item.title}</strong>
+                    <p className="muted">/topic/{item.slug} | {item.isPublished ? "published" : "draft"}</p>
+                    <p className="muted">Header: {item.showHeader ? "show" : "hide"} | Footer: {item.showFooter ? "show" : "hide"}</p>
+                    <div className="form-actions">
+                      <a className="btn btn-outline" href={`${siteOrigin}/topic/${item.slug}`} target="_blank" rel="noreferrer">Open</a>
+                      <button
+                        className="btn btn-outline"
+                        type="button"
+                        onClick={() => {
+                          setLandingTopicEditingId(item.id);
+                          setLandingTopicForm({
+                            title: item.title,
+                            slug: item.slug,
+                            html: item.html,
+                            css: item.css,
+                            js: item.js,
+                            showHeader: item.showHeader,
+                            showFooter: item.showFooter,
+                            isPublished: item.isPublished
+                          });
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button className="btn btn-outline" type="button" onClick={() => void deleteLandingTopic(item.id).then(refreshAll)}>
+                        Delete
+                      </button>
+                    </div>
+                  </article>
+                ))
+              ) : (
+                <p className="muted">No landing topics created yet.</p>
+              )}
+            </div>
+          </section>
+
+          <section className="admin-section admin-card" hidden={!isTabActive("seo")}>
             <h3>Third-Party Scripts</h3>
             <form className="form-grid" onSubmit={handleScriptSubmit}>
               <input placeholder="Script name" value={scriptForm.name} onChange={(event) => setScriptForm((prev) => ({ ...prev, name: event.target.value }))} required />
@@ -2185,7 +2449,7 @@ export default function AdminPage() {
             </div>
           </section>
 
-          <section className="admin-section admin-card">
+          <section className="admin-section admin-card" hidden={!isTabActive("engagement")}>
             <h3>Subscription and Notification Center</h3>
             <form className="form-grid" onSubmit={handleNotificationSubmit}>
               <input placeholder="Notification title" value={notificationForm.title} onChange={(event) => setNotificationForm((prev) => ({ ...prev, title: event.target.value }))} required />
@@ -2219,7 +2483,7 @@ export default function AdminPage() {
             </div>
           </section>
 
-          <section className="admin-section admin-card">
+          <section className="admin-section admin-card" hidden={!isTabActive("engagement")}>
             <h3>Post-wise Analytics</h3>
             <div className="table-like">
               {postAnalytics.length ? (
@@ -2235,7 +2499,7 @@ export default function AdminPage() {
             </div>
           </section>
 
-          <section className="admin-section admin-card">
+          <section className="admin-section admin-card" hidden={!isTabActive("engagement")}>
             <h3>Post-wise Feedback</h3>
             <div className="table-like">
               {feedback.length ? (
@@ -2258,6 +2522,41 @@ export default function AdminPage() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

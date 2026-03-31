@@ -1,14 +1,15 @@
 import type { MetadataRoute } from "next";
-import { getCourses, getCustomPages, getPosts, getSiteSettings, getWebinars } from "@/lib/firebase/data";
+import { getCourses, getCustomPages, getLandingTopics, getPosts, getSiteSettings, getWebinars } from "@/lib/firebase/data";
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
 
   try {
-    const [settings, posts, pages, webinars, courses] = await Promise.all([
+    const [settings, posts, pages, landingTopics, webinars, courses] = await Promise.all([
       getSiteSettings(),
       getPosts(),
       getCustomPages(false),
+      getLandingTopics(false),
       getWebinars(false),
       getCourses(false)
     ]);
@@ -56,6 +57,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.6
     }));
 
+    const landingTopicRoutes: MetadataRoute.Sitemap = landingTopics.map((item) => ({
+      url: `${base}/topic/${item.slug}`,
+      lastModified: item.updatedAt ? new Date(item.updatedAt) : now,
+      changeFrequency: "weekly",
+      priority: 0.7
+    }));
+
     const webinarRoutes: MetadataRoute.Sitemap = webinars
       .filter((item) => item.showPublicPage)
       .map((item) => ({
@@ -72,7 +80,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.7
     }));
 
-    return [...staticRoutes, ...postRoutes, ...pageRoutes, ...webinarRoutes, ...courseRoutes];
+    return [...staticRoutes, ...postRoutes, ...pageRoutes, ...landingTopicRoutes, ...webinarRoutes, ...courseRoutes];
   } catch {
     return [
       {

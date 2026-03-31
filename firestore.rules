@@ -53,6 +53,11 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+
+    match /landing_topics/{docId} {
+      allow read: if resource.data.isPublished == true || isAdmin();
+      allow write: if isAdmin();
+    }
     match /third_party_scripts/{docId} {
       allow read: if true;
       allow write: if isAdmin();
@@ -128,3 +133,4 @@ service cloud.firestore {
     }
   }
 }
+

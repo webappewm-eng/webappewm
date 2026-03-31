@@ -5,6 +5,7 @@ import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { LoginModal } from "@/components/auth/LoginModal";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { DesignFrame } from "@/components/design/DesignFrame";
 import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
 import { NotificationStrip } from "@/components/layout/NotificationStrip";
@@ -163,7 +164,8 @@ export function PostPageClient({
     if (!post) {
       return "";
     }
-    return buildPreviewContent(post.content, previewPercent);
+    const source = post.contentMode === "design" ? `${post.title}\n\n${post.excerpt}` : post.content;
+    return buildPreviewContent(source, previewPercent);
   }, [post, previewPercent]);
 
   const shouldLockContent = Boolean(post && previewEnabled && !user);
@@ -335,7 +337,19 @@ export function PostPageClient({
 
               <section className="post-content" style={{ marginTop: "1rem" }}>
                 <div className="post-content-inner">
-                  <ArticleRenderer content={shouldLockContent ? previewContent : post.content} />
+                  {shouldLockContent ? (
+                    <ArticleRenderer content={previewContent} />
+                  ) : post.contentMode === "design" ? (
+                    <DesignFrame
+                      title={post.title}
+                      html={post.designHtml}
+                      css={post.designCss}
+                      js={post.designJs}
+                      minHeight={620}
+                    />
+                  ) : (
+                    <ArticleRenderer content={post.content} />
+                  )}
                 </div>
 
                 {shouldLockContent ? (
@@ -465,6 +479,8 @@ export function PostPageClient({
     </div>
   );
 }
+
+
 
 
 

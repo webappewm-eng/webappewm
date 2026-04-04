@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Image from "next/image";
 import Link from "next/link";
@@ -162,6 +162,8 @@ interface HomePageClientProps {
   initialWebinars: Webinar[];
   initialCourses: Course[];
   initialPreviewPercent: number;
+  initialHeroVideoSliderEnabled: boolean;
+  initialHeroImageSliderEnabled: boolean;
   requestedCategory?: string;
   requestedSubtopic?: string;
   requestedSearch?: string;
@@ -176,6 +178,8 @@ export default function HomePageClient({
   initialWebinars,
   initialCourses,
   initialPreviewPercent,
+  initialHeroVideoSliderEnabled,
+  initialHeroImageSliderEnabled,
   requestedCategory = "",
   requestedSubtopic = "",
   requestedSearch = ""
@@ -205,6 +209,8 @@ export default function HomePageClient({
   const [videoSlides, setVideoSlides] = useState<HeroMediaItem[]>(initialVideoSlides.length ? initialVideoSlides : fallbackVideoSlides);
   const [imageSlides, setImageSlides] = useState<HeroMediaItem[]>(initialImageSlides.length ? initialImageSlides : fallbackImageSlides);
   const [previewPercent, setPreviewPercent] = useState(initialPreviewPercent || 20);
+  const [heroVideoSliderEnabled, setHeroVideoSliderEnabled] = useState(initialHeroVideoSliderEnabled);
+  const [heroImageSliderEnabled, setHeroImageSliderEnabled] = useState(initialHeroImageSliderEnabled);
 
   const [videoIndex, setVideoIndex] = useState(0);
   const [imageIndex, setImageIndex] = useState(0);
@@ -240,6 +246,8 @@ export default function HomePageClient({
         setVideoSlides(nextVideoSlides.length ? nextVideoSlides : fallbackVideoSlides);
         setImageSlides(nextImageSlides.length ? nextImageSlides : fallbackImageSlides);
         setPreviewPercent(siteSettings.contentPreviewPercent);
+        setHeroVideoSliderEnabled(siteSettings.heroVideoSliderEnabled);
+        setHeroImageSliderEnabled(siteSettings.heroImageSliderEnabled);
         setWebinars(nextWebinars.filter((item) => item.showOnHome));
         setCoursesData(nextCourses);
         setLoadError("");
@@ -328,7 +336,50 @@ export default function HomePageClient({
         <NotificationStrip />
 
         <section className="hero">
-          <div className="hero-inner">
+          <div className="hero-inner hero-inner-stacked">
+            <div className="hero-slider-wrap hero-slider-top">
+              {heroVideoSliderEnabled ? (
+                <div className="slider-box">
+                  <p className="slider-label">Video Slider</p>
+                  <div className="slide">
+                    {currentVideoSlide ? (
+                      <video key={currentVideoSlide.id} src={currentVideoSlide.source} autoPlay muted loop playsInline />
+                    ) : (
+                      <div className="notice">No video media configured yet.</div>
+                    )}
+                    {currentVideoSlide ? <span className="slide-caption">{currentVideoSlide.title}</span> : null}
+                  </div>
+                </div>
+              ) : null}
+
+              {heroImageSliderEnabled ? (
+                <div className="slider-box">
+                  <p className="slider-label">Image Slider</p>
+                  <div className="slide">
+                    {currentImageSlide ? (
+                      <Image
+                        key={currentImageSlide.id}
+                        src={currentImageSlide.source}
+                        alt={currentImageSlide.title}
+                        width={1200}
+                        height={800}
+                      />
+                    ) : (
+                      <div className="notice">No image media configured yet.</div>
+                    )}
+                    {currentImageSlide ? <span className="slide-caption">{currentImageSlide.title}</span> : null}
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="slider-box">
+                <p className="slider-label">Circuit Visual</p>
+                <div className="slide slide-svg">
+                  <HeroCircuitVisual />
+                </div>
+              </div>
+            </div>
+
             <div>
               <div className="hero-tag">Where engineers are made</div>
               <h1>
@@ -360,45 +411,6 @@ export default function HomePageClient({
                 <div className="stat">
                   <span className="stat-n">0</span>
                   <span className="stat-l">To Start</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="hero-slider-wrap">
-              <div className="slider-box">
-                <p className="slider-label">Video Slider</p>
-                <div className="slide">
-                  {currentVideoSlide ? (
-                    <video key={currentVideoSlide.id} src={currentVideoSlide.source} autoPlay muted loop playsInline />
-                  ) : (
-                    <div className="notice">No video media configured yet.</div>
-                  )}
-                  {currentVideoSlide ? <span className="slide-caption">{currentVideoSlide.title}</span> : null}
-                </div>
-              </div>
-
-              <div className="slider-box">
-                <p className="slider-label">Image Slider</p>
-                <div className="slide">
-                  {currentImageSlide ? (
-                    <Image
-                      key={currentImageSlide.id}
-                      src={currentImageSlide.source}
-                      alt={currentImageSlide.title}
-                      width={1200}
-                      height={800}
-                    />
-                  ) : (
-                    <div className="notice">No image media configured yet.</div>
-                  )}
-                  {currentImageSlide ? <span className="slide-caption">{currentImageSlide.title}</span> : null}
-                </div>
-              </div>
-
-              <div className="slider-box">
-                <p className="slider-label">Circuit Visual</p>
-                <div className="slide slide-svg">
-                  <HeroCircuitVisual />
                 </div>
               </div>
             </div>
@@ -637,6 +649,9 @@ export default function HomePageClient({
     </div>
   );
 }
+
+
+
 
 
 

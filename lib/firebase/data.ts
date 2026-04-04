@@ -26,11 +26,17 @@ import {
   mockWebinars,
   mockCourses,
   mockCertificateTemplates,
-  mockLandingTopics
+  mockCommunityCategories,
+  mockLandingTopics,
+  mockSocialLinks
 } from "@/lib/mock-data";
 import {
   AnalyticsEvent,
   AnalyticsSummary,
+  CommunityAnswer,
+  CommunityCategory,
+  CommunityQuestion,
+  CommunityStatus,
   Category,
   CustomPage,
   Feedback,
@@ -41,9 +47,12 @@ import {
   Post,
   PostAnalyticsBreakdown,
   SiteSettings,
+  SocialLink,
   Subscription,
   Subtopic,
   ThirdPartyScript,
+  VisitorAnalyticsSummary,
+  VisitorEvent,
   Webinar,
   WebinarRegistration,
   Course,
@@ -73,6 +82,11 @@ const localStore = {
   courseProgress: [] as UserCourseProgress[],
   certificateTemplates: [...mockCertificateTemplates],
   certificates: [] as UserCertificate[],
+  communityCategories: [...mockCommunityCategories] as CommunityCategory[],
+  communityQuestions: [] as CommunityQuestion[],
+  communityAnswers: [] as CommunityAnswer[],
+  socialLinks: [...mockSocialLinks] as SocialLink[],
+  visitorEvents: [] as VisitorEvent[],
   landingTopics: [...mockLandingTopics] as LandingTopic[]
 };
 
@@ -136,6 +150,21 @@ function clampNumber(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
+function normalizeCommunityStatus(value: unknown): CommunityStatus {
+  if (value === "approved" || value === "rejected") {
+    return value;
+  }
+  return "pending";
+}
+
+function normalizeUrl(value: unknown): string {
+  const next = String(value ?? "").trim();
+  if (!next) {
+    return "";
+  }
+  return /^https?:\/\//i.test(next) ? next : `https://${next}`;
+}
+
 function normalizeSiteSettings(raw: Partial<SiteSettings> | Record<string, unknown>): SiteSettings {
   const redirectType = raw.notFoundRedirectType === "custom" ? "custom" : "home";
   const redirectPath = normalizeRedirectPath(raw.notFoundRedirectPath);
@@ -150,12 +179,15 @@ function normalizeSiteSettings(raw: Partial<SiteSettings> | Record<string, unkno
     liveTrackingEnabled: raw.liveTrackingEnabled !== false,
     themeMode: raw.themeMode === "dark" ? "dark" : "light",
     layoutSideGap,
+    heroVideoSliderEnabled: raw.heroVideoSliderEnabled !== false,
+    heroImageSliderEnabled: raw.heroImageSliderEnabled !== false,
     logoMode: raw.logoMode === "image" ? "image" : "text",
     logoImageUrl: String(raw.logoImageUrl ?? "").trim(),
     logoSize,
     logoTitleLine1: String(raw.logoTitleLine1 ?? "Engineer").trim() || "Engineer",
     logoTitleLine2: String(raw.logoTitleLine2 ?? "With").trim() || "With",
     logoAccentText: String(raw.logoAccentText ?? "Me").trim() || "Me",
+    communityApprovalEnabled: raw.communityApprovalEnabled !== false,
     contentPreviewEnabled: raw.contentPreviewEnabled !== false,
     contentPreviewPercent: previewPercent,
     defaultSeoTitle: String(raw.defaultSeoTitle ?? "Engineer With Me").trim() || "Engineer With Me",
@@ -1090,12 +1122,15 @@ export async function updateNotFoundSettings(input: {
 export async function updateSiteAppearanceSettings(input: {
   themeMode: SiteSettings["themeMode"];
   layoutSideGap: number;
+  heroVideoSliderEnabled: boolean;
+  heroImageSliderEnabled: boolean;
   logoMode: SiteSettings["logoMode"];
   logoImageUrl: string;
   logoSize: number;
   logoTitleLine1: string;
   logoTitleLine2: string;
   logoAccentText: string;
+  communityApprovalEnabled: boolean;
   contentPreviewEnabled: boolean;
   contentPreviewPercent: number;
   defaultSeoTitle: string;
@@ -1122,12 +1157,15 @@ export async function updateSiteAppearanceSettings(input: {
     {
       themeMode: normalized.themeMode,
       layoutSideGap: normalized.layoutSideGap,
+      heroVideoSliderEnabled: normalized.heroVideoSliderEnabled,
+      heroImageSliderEnabled: normalized.heroImageSliderEnabled,
       logoMode: normalized.logoMode,
       logoImageUrl: normalized.logoImageUrl,
       logoSize: normalized.logoSize,
       logoTitleLine1: normalized.logoTitleLine1,
       logoTitleLine2: normalized.logoTitleLine2,
       logoAccentText: normalized.logoAccentText,
+      communityApprovalEnabled: normalized.communityApprovalEnabled,
       contentPreviewEnabled: normalized.contentPreviewEnabled,
       contentPreviewPercent: normalized.contentPreviewPercent,
       defaultSeoTitle: normalized.defaultSeoTitle,
@@ -1817,5 +1855,529 @@ export async function getCertificateById(certificateId: string): Promise<UserCer
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+function mapCommunityCategoryDoc(data: Record<string, unknown>, id: string): CommunityCategory {
+  return {
+    id,
+    name: sanitizeString(data.name),
+    slug: sanitizeString(data.slug),
+    description: sanitizeString(data.description),
+    order: Number(data.order ?? 0),
+    enabled: data.enabled !== false,
+    updatedAt: normalizeDate(data.updatedAt)
+  };
+}
+
+function mapCommunityQuestionDoc(data: Record<string, unknown>, id: string): CommunityQuestion {
+  return {
+    id,
+    categoryId: sanitizeString(data.categoryId),
+    authorName: sanitizeString(data.authorName) || "Guest",
+    authorEmail: sanitizeString(data.authorEmail),
+    authorUserId: sanitizeString(data.authorUserId),
+    question: sanitizeString(data.question),
+    status: normalizeCommunityStatus(data.status),
+    createdAt: normalizeDate(data.createdAt),
+    updatedAt: normalizeDate(data.updatedAt)
+  };
+}
+
+function mapCommunityAnswerDoc(data: Record<string, unknown>, id: string): CommunityAnswer {
+  return {
+    id,
+    questionId: sanitizeString(data.questionId),
+    categoryId: sanitizeString(data.categoryId),
+    authorName: sanitizeString(data.authorName) || "Guest",
+    authorEmail: sanitizeString(data.authorEmail),
+    authorUserId: sanitizeString(data.authorUserId),
+    answer: sanitizeString(data.answer),
+    status: normalizeCommunityStatus(data.status),
+    createdAt: normalizeDate(data.createdAt),
+    updatedAt: normalizeDate(data.updatedAt)
+  };
+}
+
+function mapSocialLinkDoc(data: Record<string, unknown>, id: string): SocialLink {
+  return {
+    id,
+    platform: sanitizeString(data.platform),
+    label: sanitizeString(data.label),
+    url: normalizeUrl(data.url),
+    order: Number(data.order ?? 0),
+    enabled: data.enabled !== false,
+    showInFooter: data.showInFooter !== false,
+    showFloating: data.showFloating !== false,
+    updatedAt: normalizeDate(data.updatedAt)
+  };
+}
+
+function mapVisitorDoc(data: Record<string, unknown>, id: string): VisitorEvent {
+  return {
+    id,
+    visitorId: sanitizeString(data.visitorId) || id,
+    country: sanitizeString(data.country) || "Unknown",
+    firstVisitedAt: normalizeDate(data.firstVisitedAt),
+    lastVisitedAt: normalizeDate(data.lastVisitedAt),
+    lastPath: sanitizeString(data.lastPath)
+  };
+}
+
+export async function getSocialLinks(location?: "footer" | "floating"): Promise<SocialLink[]> {
+  const applyFilter = (rows: SocialLink[]) => {
+    let filtered = rows.filter((item) => item.enabled);
+    if (location === "footer") {
+      filtered = filtered.filter((item) => item.showInFooter);
+    }
+    if (location === "floating") {
+      filtered = filtered.filter((item) => item.showFloating);
+    }
+    return sortByOrder(filtered);
+  };
+
+  if (!hasFirebaseConfig || !db) {
+    return applyFilter(localStore.socialLinks);
+  }
+
+  const snap = await getDocs(collection(db, "social_links"));
+  const rows = snap.docs.map((item) => mapSocialLinkDoc(item.data() as Record<string, unknown>, item.id));
+  return applyFilter(rows);
+}
+
+export async function getSocialLinksForAdmin(): Promise<SocialLink[]> {
+  if (!hasFirebaseConfig || !db) {
+    return sortByOrder(localStore.socialLinks);
+  }
+
+  const snap = await getDocs(collection(db, "social_links"));
+  return sortByOrder(snap.docs.map((item) => mapSocialLinkDoc(item.data() as Record<string, unknown>, item.id)));
+}
+
+export async function createSocialLink(input: Omit<SocialLink, "id" | "updatedAt">): Promise<void> {
+  const payload = {
+    ...input,
+    platform: sanitizeString(input.platform).toLowerCase(),
+    label: sanitizeString(input.label),
+    url: normalizeUrl(input.url),
+    order: Number(input.order ?? 0),
+    enabled: input.enabled !== false,
+    showInFooter: input.showInFooter !== false,
+    showFloating: input.showFloating !== false
+  };
+
+  if (!hasFirebaseConfig || !db) {
+    localStore.socialLinks.push({ id: `social-${Date.now()}`, ...payload, updatedAt: new Date().toISOString() });
+    return;
+  }
+
+  await addDoc(collection(db, "social_links"), {
+    ...payload,
+    updatedAt: serverTimestamp()
+  });
+}
+
+export async function updateSocialLink(
+  id: string,
+  input: Partial<Omit<SocialLink, "id" | "updatedAt">>
+): Promise<void> {
+  const payload = {
+    ...input,
+    ...(typeof input.platform === "string" ? { platform: sanitizeString(input.platform).toLowerCase() } : {}),
+    ...(typeof input.label === "string" ? { label: sanitizeString(input.label) } : {}),
+    ...(typeof input.url === "string" ? { url: normalizeUrl(input.url) } : {})
+  };
+
+  if (!hasFirebaseConfig || !db) {
+    localStore.socialLinks = localStore.socialLinks.map((item) =>
+      item.id === id ? { ...item, ...payload, updatedAt: new Date().toISOString() } : item
+    );
+    return;
+  }
+
+  await updateDoc(doc(db, "social_links", id), {
+    ...payload,
+    updatedAt: serverTimestamp()
+  });
+}
+
+export async function deleteSocialLink(id: string): Promise<void> {
+  if (!hasFirebaseConfig || !db) {
+    localStore.socialLinks = localStore.socialLinks.filter((item) => item.id !== id);
+    return;
+  }
+
+  await deleteDoc(doc(db, "social_links", id));
+}
+
+export async function getCommunityCategories(): Promise<CommunityCategory[]> {
+  const filterRows = (rows: CommunityCategory[]) => sortByOrder(rows.filter((item) => item.enabled));
+
+  if (!hasFirebaseConfig || !db) {
+    return filterRows(localStore.communityCategories);
+  }
+
+  const snap = await getDocs(collection(db, "community_categories"));
+  return filterRows(snap.docs.map((item) => mapCommunityCategoryDoc(item.data() as Record<string, unknown>, item.id)));
+}
+
+export async function getCommunityCategoriesForAdmin(): Promise<CommunityCategory[]> {
+  if (!hasFirebaseConfig || !db) {
+    return sortByOrder(localStore.communityCategories);
+  }
+
+  const snap = await getDocs(collection(db, "community_categories"));
+  return sortByOrder(snap.docs.map((item) => mapCommunityCategoryDoc(item.data() as Record<string, unknown>, item.id)));
+}
+
+export async function createCommunityCategory(input: Omit<CommunityCategory, "id" | "updatedAt">): Promise<void> {
+  const payload = {
+    name: sanitizeString(input.name),
+    slug: sanitizeString(input.slug),
+    description: sanitizeString(input.description),
+    order: Number(input.order ?? 0),
+    enabled: input.enabled !== false
+  };
+
+  if (!hasFirebaseConfig || !db) {
+    localStore.communityCategories.push({ id: `community-category-${Date.now()}`, ...payload, updatedAt: new Date().toISOString() });
+    return;
+  }
+
+  await addDoc(collection(db, "community_categories"), {
+    ...payload,
+    updatedAt: serverTimestamp()
+  });
+}
+
+export async function updateCommunityCategory(
+  id: string,
+  input: Partial<Omit<CommunityCategory, "id" | "updatedAt">>
+): Promise<void> {
+  const payload = {
+    ...input,
+    ...(typeof input.name === "string" ? { name: sanitizeString(input.name) } : {}),
+    ...(typeof input.slug === "string" ? { slug: sanitizeString(input.slug) } : {}),
+    ...(typeof input.description === "string" ? { description: sanitizeString(input.description) } : {})
+  };
+
+  if (!hasFirebaseConfig || !db) {
+    localStore.communityCategories = localStore.communityCategories.map((item) =>
+      item.id === id ? { ...item, ...payload, updatedAt: new Date().toISOString() } : item
+    );
+    return;
+  }
+
+  await updateDoc(doc(db, "community_categories", id), {
+    ...payload,
+    updatedAt: serverTimestamp()
+  });
+}
+
+export async function deleteCommunityCategory(id: string): Promise<void> {
+  if (!hasFirebaseConfig || !db) {
+    localStore.communityCategories = localStore.communityCategories.filter((item) => item.id !== id);
+    localStore.communityQuestions = localStore.communityQuestions.filter((item) => item.categoryId !== id);
+    localStore.communityAnswers = localStore.communityAnswers.filter((item) => item.categoryId !== id);
+    return;
+  }
+
+  await deleteDoc(doc(db, "community_categories", id));
+}
+
+export async function createCommunityQuestion(input: {
+  categoryId: string;
+  question: string;
+  authorName?: string;
+  authorEmail?: string;
+  authorUserId?: string;
+  requiresApproval: boolean;
+}): Promise<void> {
+  const payload = {
+    categoryId: sanitizeString(input.categoryId),
+    question: sanitizeString(input.question),
+    authorName: sanitizeString(input.authorName) || "Guest",
+    authorEmail: sanitizeString(input.authorEmail),
+    authorUserId: sanitizeString(input.authorUserId),
+    status: input.requiresApproval ? "pending" : "approved",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  } as const;
+
+  if (!hasFirebaseConfig || !db) {
+    localStore.communityQuestions.unshift({ id: `community-question-${Date.now()}`, ...payload });
+    return;
+  }
+
+  await addDoc(collection(db, "community_questions"), {
+    ...payload,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  });
+}
+
+export async function createCommunityAnswer(input: {
+  questionId: string;
+  categoryId: string;
+  answer: string;
+  authorName?: string;
+  authorEmail?: string;
+  authorUserId?: string;
+  requiresApproval: boolean;
+}): Promise<void> {
+  const payload = {
+    questionId: sanitizeString(input.questionId),
+    categoryId: sanitizeString(input.categoryId),
+    answer: sanitizeString(input.answer),
+    authorName: sanitizeString(input.authorName) || "Guest",
+    authorEmail: sanitizeString(input.authorEmail),
+    authorUserId: sanitizeString(input.authorUserId),
+    status: input.requiresApproval ? "pending" : "approved",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  } as const;
+
+  if (!hasFirebaseConfig || !db) {
+    localStore.communityAnswers.unshift({ id: `community-answer-${Date.now()}`, ...payload });
+    return;
+  }
+
+  await addDoc(collection(db, "community_answers"), {
+    ...payload,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp()
+  });
+}
+
+function filterCommunityBySearch<T extends { question?: string; answer?: string; authorName: string }>(
+  rows: T[],
+  search: string
+): T[] {
+  const normalized = search.trim().toLowerCase();
+  if (!normalized) {
+    return rows;
+  }
+
+  return rows.filter((item) => {
+    const haystack = [item.authorName, item.question ?? "", item.answer ?? ""].join(" ").toLowerCase();
+    return haystack.includes(normalized);
+  });
+}
+
+export async function getCommunityQuestionsForPublic(filters?: {
+  categoryId?: string;
+  search?: string;
+}): Promise<CommunityQuestion[]> {
+  const [settings, rows] = await Promise.all([
+    getSiteSettings(),
+    (async () => {
+      if (!hasFirebaseConfig || !db) {
+        return [...localStore.communityQuestions];
+      }
+      const snap = await getDocs(collection(db, "community_questions"));
+      return snap.docs.map((item) => mapCommunityQuestionDoc(item.data() as Record<string, unknown>, item.id));
+    })()
+  ]);
+
+  let filtered = rows;
+  if (filters?.categoryId) {
+    filtered = filtered.filter((item) => item.categoryId === filters.categoryId);
+  }
+  if (settings.communityApprovalEnabled) {
+    filtered = filtered.filter((item) => item.status === "approved");
+  }
+
+  return sortByDateDesc(filterCommunityBySearch(filtered, filters?.search ?? ""));
+}
+
+export async function getCommunityAnswersForPublic(filters?: {
+  questionId?: string;
+  categoryId?: string;
+  search?: string;
+}): Promise<CommunityAnswer[]> {
+  const [settings, rows] = await Promise.all([
+    getSiteSettings(),
+    (async () => {
+      if (!hasFirebaseConfig || !db) {
+        return [...localStore.communityAnswers];
+      }
+      const snap = await getDocs(collection(db, "community_answers"));
+      return snap.docs.map((item) => mapCommunityAnswerDoc(item.data() as Record<string, unknown>, item.id));
+    })()
+  ]);
+
+  let filtered = rows;
+  if (filters?.questionId) {
+    filtered = filtered.filter((item) => item.questionId === filters.questionId);
+  }
+  if (filters?.categoryId) {
+    filtered = filtered.filter((item) => item.categoryId === filters.categoryId);
+  }
+  if (settings.communityApprovalEnabled) {
+    filtered = filtered.filter((item) => item.status === "approved");
+  }
+
+  return sortByDateDesc(filterCommunityBySearch(filtered, filters?.search ?? ""));
+}
+
+export async function getCommunityQuestionsForAdmin(): Promise<CommunityQuestion[]> {
+  if (!hasFirebaseConfig || !db) {
+    return sortByDateDesc(localStore.communityQuestions);
+  }
+
+  const snap = await getDocs(collection(db, "community_questions"));
+  return sortByDateDesc(snap.docs.map((item) => mapCommunityQuestionDoc(item.data() as Record<string, unknown>, item.id)));
+}
+
+export async function getCommunityAnswersForAdmin(): Promise<CommunityAnswer[]> {
+  if (!hasFirebaseConfig || !db) {
+    return sortByDateDesc(localStore.communityAnswers);
+  }
+
+  const snap = await getDocs(collection(db, "community_answers"));
+  return sortByDateDesc(snap.docs.map((item) => mapCommunityAnswerDoc(item.data() as Record<string, unknown>, item.id)));
+}
+
+export async function updateCommunityQuestionStatus(id: string, status: CommunityStatus): Promise<void> {
+  if (!hasFirebaseConfig || !db) {
+    localStore.communityQuestions = localStore.communityQuestions.map((item) =>
+      item.id === id ? { ...item, status, updatedAt: new Date().toISOString() } : item
+    );
+    return;
+  }
+
+  await updateDoc(doc(db, "community_questions", id), {
+    status,
+    updatedAt: serverTimestamp()
+  });
+}
+
+export async function updateCommunityAnswerStatus(id: string, status: CommunityStatus): Promise<void> {
+  if (!hasFirebaseConfig || !db) {
+    localStore.communityAnswers = localStore.communityAnswers.map((item) =>
+      item.id === id ? { ...item, status, updatedAt: new Date().toISOString() } : item
+    );
+    return;
+  }
+
+  await updateDoc(doc(db, "community_answers", id), {
+    status,
+    updatedAt: serverTimestamp()
+  });
+}
+
+export async function deleteCommunityQuestion(id: string): Promise<void> {
+  if (!hasFirebaseConfig || !db) {
+    localStore.communityQuestions = localStore.communityQuestions.filter((item) => item.id !== id);
+    localStore.communityAnswers = localStore.communityAnswers.filter((item) => item.questionId !== id);
+    return;
+  }
+
+  const dbRef = db;
+  await deleteDoc(doc(dbRef, "community_questions", id));
+  const answersSnap = await getDocs(query(collection(dbRef, "community_answers"), where("questionId", "==", id)));
+  await Promise.all(answersSnap.docs.map((item) => deleteDoc(doc(dbRef, "community_answers", item.id))));
+}
+
+export async function deleteCommunityAnswer(id: string): Promise<void> {
+  if (!hasFirebaseConfig || !db) {
+    localStore.communityAnswers = localStore.communityAnswers.filter((item) => item.id !== id);
+    return;
+  }
+
+  await deleteDoc(doc(db, "community_answers", id));
+}
+
+export async function trackVisitorEvent(input: { visitorId: string; country: string; pagePath: string }): Promise<void> {
+  const visitorId = sanitizeString(input.visitorId);
+  if (!visitorId) {
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const country = sanitizeString(input.country) || "Unknown";
+  const pagePath = sanitizeString(input.pagePath) || "/";
+
+  if (!hasFirebaseConfig || !db) {
+    const existing = localStore.visitorEvents.find((item) => item.visitorId === visitorId);
+    if (existing) {
+      localStore.visitorEvents = localStore.visitorEvents.map((item) =>
+        item.visitorId === visitorId
+          ? { ...item, lastVisitedAt: now, lastPath: pagePath, country: item.country || country }
+          : item
+      );
+    } else {
+      localStore.visitorEvents.push({
+        id: visitorId,
+        visitorId,
+        country,
+        firstVisitedAt: now,
+        lastVisitedAt: now,
+        lastPath: pagePath
+      });
+    }
+    return;
+  }
+
+  const ref = doc(db, "visitor_events", visitorId);
+  const existing = await getDoc(ref);
+  if (existing.exists()) {
+    const existingData = existing.data() as Record<string, unknown>;
+    await updateDoc(ref, {
+      country: sanitizeString(existingData.country) || country,
+      lastVisitedAt: serverTimestamp(),
+      lastPath: pagePath
+    });
+    return;
+  }
+
+  await setDoc(ref, {
+    visitorId,
+    country,
+    firstVisitedAt: serverTimestamp(),
+    lastVisitedAt: serverTimestamp(),
+    lastPath: pagePath
+  });
+}
+
+export async function getVisitorAnalytics(): Promise<VisitorAnalyticsSummary> {
+  const rows: VisitorEvent[] = !hasFirebaseConfig || !db
+    ? [...localStore.visitorEvents]
+    : (await getDocs(collection(db, "visitor_events"))).docs.map((item) =>
+        mapVisitorDoc(item.data() as Record<string, unknown>, item.id)
+      );
+
+  const byDateMap: Record<string, number> = {};
+  const byCountryMap: Record<string, number> = {};
+
+  rows.forEach((item) => {
+    const dateKey = item.firstVisitedAt.slice(0, 10);
+    byDateMap[dateKey] = (byDateMap[dateKey] ?? 0) + 1;
+    const country = item.country || "Unknown";
+    byCountryMap[country] = (byCountryMap[country] ?? 0) + 1;
+  });
+
+  const byDate = Object.entries(byDateMap)
+    .map(([date, count]) => ({ date, count }))
+    .sort((a, b) => b.date.localeCompare(a.date));
+
+  const byCountry = Object.entries(byCountryMap)
+    .map(([country, count]) => ({ country, count }))
+    .sort((a, b) => b.count - a.count || a.country.localeCompare(b.country));
+
+  return {
+    totalVisitors: rows.length,
+    byDate,
+    byCountry
+  };
+}
 
 

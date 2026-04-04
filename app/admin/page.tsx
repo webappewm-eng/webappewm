@@ -9,10 +9,12 @@ import { DesignStudio } from "@/components/editor/DesignStudio";
 import { uploadPostImage, uploadSiteAsset } from "@/lib/firebase/storage";
 import {
   createCategory,
+  createCommunityCategory,
   createCustomPage,
   createHeroMedia,
   createNotification,
   createNavigationLink,
+  createSocialLink,
   createPost,
   createSubtopic,
   createThirdPartyScript,
@@ -21,9 +23,13 @@ import {
   createCertificateTemplate,
   createLandingTopic,
   deleteCategory,
+  deleteCommunityAnswer,
+  deleteCommunityCategory,
+  deleteCommunityQuestion,
   deleteCustomPage,
   deleteHeroMedia,
   deleteNavigationLink,
+  deleteSocialLink,
   deletePost,
   deleteSubtopic,
   deleteThirdPartyScript,
@@ -32,6 +38,9 @@ import {
   deleteCertificateTemplate,
   deleteLandingTopic,
   getAnalyticsSummary,
+  getCommunityAnswersForAdmin,
+  getCommunityCategoriesForAdmin,
+  getCommunityQuestionsForAdmin,
   getCategories,
   getCustomPages,
   getFeedback,
@@ -39,10 +48,12 @@ import {
   getHeroMediaForAdmin,
   getNotifications,
   getNavigationLinksForAdmin,
+  getSocialLinksForAdmin,
   getPosts,
   getSiteSettings,
   getSubtopics,
   getThirdPartyScripts,
+  getVisitorAnalytics,
   getWebinars,
   getWebinarRegistrations,
   getCourses,
@@ -52,10 +63,14 @@ import {
   getLandingTopics,
   listSubscriptions,
   updateCategory,
+  updateCommunityAnswerStatus,
+  updateCommunityCategory,
+  updateCommunityQuestionStatus,
   updateCustomPage,
   updateHeroMedia,
   updateLiveTracking,
   updateNavigationLink,
+  updateSocialLink,
   updateNotFoundSettings,
   updatePost,
   updateSiteAppearanceSettings,
@@ -69,6 +84,10 @@ import {
 import {
   AnalyticsSummary,
   Category,
+  CommunityAnswer,
+  CommunityCategory,
+  CommunityQuestion,
+  CommunityStatus,
   CustomPage,
   Feedback,
   HeroMediaItem,
@@ -77,6 +96,7 @@ import {
   Post,
   PostAnalyticsBreakdown,
   SiteSettings,
+  SocialLink,
   Subscription,
   Subtopic,
   ThirdPartyScript,
@@ -86,7 +106,8 @@ import {
   UserCourseProgress,
   CertificateTemplate,
   LandingTopic,
-  UserCertificate
+  UserCertificate,
+  VisitorAnalyticsSummary
 } from "@/lib/types";
 const emptyPostForm = {
   title: "",
@@ -163,6 +184,23 @@ const emptyLandingTopicForm = {
   showHeader: true,
   showFooter: true,
   isPublished: true
+};
+
+const emptyCommunityCategoryForm = {
+  name: "",
+  slug: "",
+  description: "",
+  enabled: true
+};
+
+const emptySocialForm = {
+  platform: "youtube",
+  label: "",
+  url: "",
+  order: "1",
+  enabled: true,
+  showInFooter: true,
+  showFloating: true
 };
 
 function slugify(value: string): string {
@@ -264,18 +302,30 @@ export default function AdminPage() {
   const [courseProgress, setCourseProgress] = useState<UserCourseProgress[]>([]);
   const [certificateTemplates, setCertificateTemplates] = useState<CertificateTemplate[]>([]);
   const [certificates, setCertificates] = useState<UserCertificate[]>([]);
+  const [communityCategories, setCommunityCategories] = useState<CommunityCategory[]>([]);
+  const [communityQuestions, setCommunityQuestions] = useState<CommunityQuestion[]>([]);
+  const [communityAnswers, setCommunityAnswers] = useState<CommunityAnswer[]>([]);
+  const [socialLinks, setSocialLinks] = useState<SocialLink[]>([]);
+  const [visitorAnalytics, setVisitorAnalytics] = useState<VisitorAnalyticsSummary>({
+    totalVisitors: 0,
+    byDate: [],
+    byCountry: []
+  });
 
   const [settings, setSettings] = useState<SiteSettings>({
     id: "global",
     liveTrackingEnabled: true,
     themeMode: "light",
     layoutSideGap: 32,
+    heroVideoSliderEnabled: true,
+    heroImageSliderEnabled: true,
     logoMode: "text",
     logoImageUrl: "",
     logoSize: 38,
     logoTitleLine1: "Engineer",
     logoTitleLine2: "With",
     logoAccentText: "Me",
+    communityApprovalEnabled: true,
     contentPreviewEnabled: true,
     contentPreviewPercent: 20,
     defaultSeoTitle: "Engineer With Me",
@@ -320,12 +370,15 @@ export default function AdminPage() {
   const [appearanceForm, setAppearanceForm] = useState({
     themeMode: "light" as SiteSettings["themeMode"],
     layoutSideGap: "32",
+    heroVideoSliderEnabled: true,
+    heroImageSliderEnabled: true,
     logoMode: "text" as SiteSettings["logoMode"],
     logoImageUrl: "",
     logoSize: "38",
     logoTitleLine1: "Engineer",
     logoTitleLine2: "With",
     logoAccentText: "Me",
+    communityApprovalEnabled: true,
     contentPreviewEnabled: true,
     contentPreviewPercent: "20",
     defaultSeoTitle: "Engineer With Me",
@@ -349,6 +402,12 @@ export default function AdminPage() {
     openInNewTab: false
   });
   const [navEditingId, setNavEditingId] = useState("");
+
+  const [communityCategoryForm, setCommunityCategoryForm] = useState(emptyCommunityCategoryForm);
+  const [communityCategoryEditingId, setCommunityCategoryEditingId] = useState("");
+
+  const [socialForm, setSocialForm] = useState(emptySocialForm);
+  const [socialEditingId, setSocialEditingId] = useState("");
 
   const [notFoundForm, setNotFoundForm] = useState({
     notFoundRedirectType: "home" as SiteSettings["notFoundRedirectType"],
@@ -398,7 +457,12 @@ export default function AdminPage() {
       nextCourses,
       nextCourseProgress,
       nextTemplates,
-      nextCertificates
+      nextCertificates,
+      nextCommunityCategories,
+      nextCommunityQuestions,
+      nextCommunityAnswers,
+      nextSocialLinks,
+      nextVisitorAnalytics
     ] = await Promise.all([
       getCategories(),
       getSubtopics(),
@@ -419,7 +483,12 @@ export default function AdminPage() {
       getCourses(true),
       getCourseProgressForAdmin(),
       getCertificateTemplates(),
-      getCertificatesForAdmin()
+      getCertificatesForAdmin(),
+      getCommunityCategoriesForAdmin(),
+      getCommunityQuestionsForAdmin(),
+      getCommunityAnswersForAdmin(),
+      getSocialLinksForAdmin(),
+      getVisitorAnalytics()
     ]);
 
     setCategories(nextCategories);
@@ -442,6 +511,11 @@ export default function AdminPage() {
     setCourseProgress(nextCourseProgress);
     setCertificateTemplates(nextTemplates);
     setCertificates(nextCertificates);
+    setCommunityCategories(nextCommunityCategories);
+    setCommunityQuestions(nextCommunityQuestions);
+    setCommunityAnswers(nextCommunityAnswers);
+    setSocialLinks(nextSocialLinks);
+    setVisitorAnalytics(nextVisitorAnalytics);
 
     setNotFoundForm({
       notFoundRedirectType: nextSettings.notFoundRedirectType,
@@ -452,12 +526,15 @@ export default function AdminPage() {
     setAppearanceForm({
       themeMode: nextSettings.themeMode,
       layoutSideGap: String(nextSettings.layoutSideGap),
+      heroVideoSliderEnabled: nextSettings.heroVideoSliderEnabled,
+      heroImageSliderEnabled: nextSettings.heroImageSliderEnabled,
       logoMode: nextSettings.logoMode,
       logoImageUrl: nextSettings.logoImageUrl,
       logoSize: String(nextSettings.logoSize),
       logoTitleLine1: nextSettings.logoTitleLine1,
       logoTitleLine2: nextSettings.logoTitleLine2,
       logoAccentText: nextSettings.logoAccentText,
+      communityApprovalEnabled: nextSettings.communityApprovalEnabled,
       contentPreviewEnabled: nextSettings.contentPreviewEnabled,
       contentPreviewPercent: String(nextSettings.contentPreviewPercent),
       defaultSeoTitle: nextSettings.defaultSeoTitle,
@@ -852,12 +929,15 @@ export default function AdminPage() {
     await updateSiteAppearanceSettings({
       themeMode: appearanceForm.themeMode,
       layoutSideGap: nextSideGap,
+      heroVideoSliderEnabled: appearanceForm.heroVideoSliderEnabled,
+      heroImageSliderEnabled: appearanceForm.heroImageSliderEnabled,
       logoMode: appearanceForm.logoMode,
       logoImageUrl: appearanceForm.logoImageUrl,
       logoSize: Number(appearanceForm.logoSize || "38"),
       logoTitleLine1: appearanceForm.logoTitleLine1,
       logoTitleLine2: appearanceForm.logoTitleLine2,
       logoAccentText: appearanceForm.logoAccentText,
+      communityApprovalEnabled: appearanceForm.communityApprovalEnabled,
       contentPreviewEnabled: appearanceForm.contentPreviewEnabled,
       contentPreviewPercent: Number(appearanceForm.contentPreviewPercent || "20"),
       defaultSeoTitle: appearanceForm.defaultSeoTitle,
@@ -987,6 +1067,66 @@ export default function AdminPage() {
       openInNewTab: false
     });
     setNavEditingId("");
+    await refreshAll();
+  }
+
+  async function handleCommunityCategorySubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const payload = {
+      name: communityCategoryForm.name.trim(),
+      slug: slugify(communityCategoryForm.slug || communityCategoryForm.name),
+      description: communityCategoryForm.description.trim(),
+      order: communityCategories.length + 1,
+      enabled: communityCategoryForm.enabled
+    };
+
+    if (!payload.name) {
+      setStatus("Community category name is required.");
+      return;
+    }
+
+    if (communityCategoryEditingId) {
+      await updateCommunityCategory(communityCategoryEditingId, payload);
+      setStatus("Community category updated.");
+    } else {
+      await createCommunityCategory(payload);
+      setStatus("Community category created.");
+    }
+
+    setCommunityCategoryEditingId("");
+    setCommunityCategoryForm(emptyCommunityCategoryForm);
+    await refreshAll();
+  }
+
+  async function handleSocialLinkSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const payload = {
+      platform: socialForm.platform.trim(),
+      label: socialForm.label.trim() || socialForm.platform,
+      url: socialForm.url.trim(),
+      order: Number(socialForm.order || "0"),
+      enabled: socialForm.enabled,
+      showInFooter: socialForm.showInFooter,
+      showFloating: socialForm.showFloating
+    };
+
+    if (!payload.platform || !payload.url) {
+      setStatus("Social platform and URL are required.");
+      return;
+    }
+
+    if (socialEditingId) {
+      await updateSocialLink(socialEditingId, payload);
+      setStatus("Social link updated.");
+    } else {
+      await createSocialLink(payload);
+      setStatus("Social link created.");
+    }
+
+    setSocialEditingId("");
+    setSocialForm(emptySocialForm);
     await refreshAll();
   }
   async function handleNotFoundSettingsSubmit(event: FormEvent<HTMLFormElement>) {
@@ -1234,6 +1374,7 @@ export default function AdminPage() {
               <div className="notice"><strong>Feedback count:</strong> {analytics.feedbackCount}</div>
               <div className="notice"><strong>Subscriptions:</strong> {subscriptions.length}</div>
               <div className="notice"><strong>Notifications:</strong> {notifications.length}</div>
+              <div className="notice"><strong>Total visitors:</strong> {visitorAnalytics.totalVisitors}</div>
             </div>
             <div className="form-actions" style={{ marginTop: "0.8rem" }}>
               <button
@@ -1249,6 +1390,332 @@ export default function AdminPage() {
             </div>
           </section>
 
+          
+
+          
+
+          
+          <section className="admin-section admin-card" hidden={!isTabActive("general")}>
+            <h3>Visitor Analytics</h3>
+            <div className="notice"><strong>Total visitors:</strong> {visitorAnalytics.totalVisitors}</div>
+            <div className="table-like">
+              <div className="notice">
+                <strong>Date-wise visitors</strong>
+                {visitorAnalytics.byDate.length ? (
+                  visitorAnalytics.byDate.map((item) => (
+                    <p className="muted" key={`visitor-date-${item.date}`}>{item.date}: {item.count}</p>
+                  ))
+                ) : (
+                  <p className="muted">No visitor data yet.</p>
+                )}
+              </div>
+              <div className="notice">
+                <strong>Country-wise visitors</strong>
+                {visitorAnalytics.byCountry.length ? (
+                  visitorAnalytics.byCountry.map((item) => (
+                    <p className="muted" key={`visitor-country-${item.country}`}>{item.country}: {item.count}</p>
+                  ))
+                ) : (
+                  <p className="muted">No visitor data yet.</p>
+                )}
+              </div>
+            </div>
+          </section>
+
+          <section className="admin-section admin-card" hidden={!isTabActive("general")}>
+            <h3>Social Links (Footer + Floating)</h3>
+            <p className="muted">Manage social media links shown in footer and floating left icons.</p>
+            <form className="form-grid" onSubmit={handleSocialLinkSubmit}>
+              <input
+                placeholder="Platform (youtube, instagram, x, linkedin...)"
+                value={socialForm.platform}
+                onChange={(event) => setSocialForm((prev) => ({ ...prev, platform: event.target.value }))}
+                required
+              />
+              <input
+                placeholder="Label"
+                value={socialForm.label}
+                onChange={(event) => setSocialForm((prev) => ({ ...prev, label: event.target.value }))}
+              />
+              <input
+                placeholder="https://..."
+                value={socialForm.url}
+                onChange={(event) => setSocialForm((prev) => ({ ...prev, url: event.target.value }))}
+                required
+              />
+              <input
+                type="number"
+                min={0}
+                placeholder="Order"
+                value={socialForm.order}
+                onChange={(event) => setSocialForm((prev) => ({ ...prev, order: event.target.value }))}
+              />
+              <label>
+                <input
+                  type="checkbox"
+                  checked={socialForm.enabled}
+                  onChange={(event) => setSocialForm((prev) => ({ ...prev, enabled: event.target.checked }))}
+                />
+                Enabled
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={socialForm.showInFooter}
+                  onChange={(event) => setSocialForm((prev) => ({ ...prev, showInFooter: event.target.checked }))}
+                />
+                Show in footer
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={socialForm.showFloating}
+                  onChange={(event) => setSocialForm((prev) => ({ ...prev, showFloating: event.target.checked }))}
+                />
+                Show in floating icons
+              </label>
+              <div className="form-actions">
+                <button className="btn btn-primary" type="submit">
+                  {socialEditingId ? "Update Social Link" : "Add Social Link"}
+                </button>
+                {socialEditingId ? (
+                  <button
+                    className="btn btn-outline"
+                    type="button"
+                    onClick={() => {
+                      setSocialEditingId("");
+                      setSocialForm(emptySocialForm);
+                    }}
+                  >
+                    Cancel Edit
+                  </button>
+                ) : null}
+              </div>
+            </form>
+            <div className="table-like">
+              {socialLinks.length ? (
+                socialLinks.map((item) => (
+                  <article className="notice" key={`social-link-${item.id}`}>
+                    <strong>{item.label}</strong>
+                    <p className="muted">
+                      {item.platform} | {item.url} | order {item.order} | {item.enabled ? "enabled" : "disabled"}
+                    </p>
+                    <p className="muted">Footer: {item.showInFooter ? "yes" : "no"} | Floating: {item.showFloating ? "yes" : "no"}</p>
+                    <div className="form-actions">
+                      <button
+                        className="btn btn-outline"
+                        type="button"
+                        onClick={() => {
+                          setSocialEditingId(item.id);
+                          setSocialForm({
+                            platform: item.platform,
+                            label: item.label,
+                            url: item.url,
+                            order: String(item.order),
+                            enabled: item.enabled,
+                            showInFooter: item.showInFooter,
+                            showFloating: item.showFloating
+                          });
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="btn btn-outline"
+                        type="button"
+                        onClick={() => void updateSocialLink(item.id, { enabled: !item.enabled }).then(refreshAll)}
+                      >
+                        {item.enabled ? "Disable" : "Enable"}
+                      </button>
+                      <button
+                        className="btn btn-outline"
+                        type="button"
+                        onClick={() => void deleteSocialLink(item.id).then(refreshAll)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </article>
+                ))
+              ) : (
+                <p className="muted">No social links added yet.</p>
+              )}
+            </div>
+          </section>
+
+          <section className="admin-section admin-card" hidden={!isTabActive("engagement")}>
+            <h3>Community Categories and Moderation</h3>
+            <form className="form-grid" onSubmit={handleCommunityCategorySubmit}>
+              <input
+                placeholder="Category name"
+                value={communityCategoryForm.name}
+                onChange={(event) => setCommunityCategoryForm((prev) => ({ ...prev, name: event.target.value }))}
+                required
+              />
+              <input
+                placeholder="Category slug"
+                value={communityCategoryForm.slug}
+                onChange={(event) => setCommunityCategoryForm((prev) => ({ ...prev, slug: event.target.value }))}
+                required
+              />
+              <textarea
+                rows={2}
+                placeholder="Description"
+                value={communityCategoryForm.description}
+                onChange={(event) => setCommunityCategoryForm((prev) => ({ ...prev, description: event.target.value }))}
+              />
+              <label>
+                <input
+                  type="checkbox"
+                  checked={communityCategoryForm.enabled}
+                  onChange={(event) => setCommunityCategoryForm((prev) => ({ ...prev, enabled: event.target.checked }))}
+                />
+                Enabled
+              </label>
+              <div className="form-actions">
+                <button className="btn btn-primary" type="submit">
+                  {communityCategoryEditingId ? "Update Community Category" : "Add Community Category"}
+                </button>
+                {communityCategoryEditingId ? (
+                  <button
+                    className="btn btn-outline"
+                    type="button"
+                    onClick={() => {
+                      setCommunityCategoryEditingId("");
+                      setCommunityCategoryForm(emptyCommunityCategoryForm);
+                    }}
+                  >
+                    Cancel Edit
+                  </button>
+                ) : null}
+              </div>
+            </form>
+
+            <div className="table-like">
+              {communityCategories.length ? (
+                communityCategories.map((item) => (
+                  <article className="notice" key={`community-category-${item.id}`}>
+                    <strong>{item.name}</strong>
+                    <p className="muted">{item.slug} | {item.enabled ? "enabled" : "disabled"}</p>
+                    <p className="muted">{item.description}</p>
+                    <div className="form-actions">
+                      <button
+                        className="btn btn-outline"
+                        type="button"
+                        onClick={() => {
+                          setCommunityCategoryEditingId(item.id);
+                          setCommunityCategoryForm({
+                            name: item.name,
+                            slug: item.slug,
+                            description: item.description,
+                            enabled: item.enabled
+                          });
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="btn btn-outline"
+                        type="button"
+                        onClick={() => void updateCommunityCategory(item.id, { enabled: !item.enabled }).then(refreshAll)}
+                      >
+                        {item.enabled ? "Disable" : "Enable"}
+                      </button>
+                      <button
+                        className="btn btn-outline"
+                        type="button"
+                        onClick={() => void deleteCommunityCategory(item.id).then(refreshAll)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </article>
+                ))
+              ) : (
+                <p className="muted">No community categories yet.</p>
+              )}
+            </div>
+
+            <div className="table-like">
+              <div className="notice">
+                <strong>Questions pending approval</strong>
+                {communityQuestions.filter((item) => item.status === "pending").length ? (
+                  communityQuestions
+                    .filter((item) => item.status === "pending")
+                    .map((item) => (
+                      <div key={`community-question-${item.id}`} style={{ marginTop: "0.75rem" }}>
+                        <p>{item.question}</p>
+                        <p className="muted">{item.authorName} | {new Date(item.createdAt).toLocaleString()}</p>
+                        <div className="form-actions">
+                          <button
+                            className="btn btn-outline"
+                            type="button"
+                            onClick={() => void updateCommunityQuestionStatus(item.id, "approved" as CommunityStatus).then(refreshAll)}
+                          >
+                            Approve
+                          </button>
+                          <button
+                            className="btn btn-outline"
+                            type="button"
+                            onClick={() => void updateCommunityQuestionStatus(item.id, "rejected" as CommunityStatus).then(refreshAll)}
+                          >
+                            Reject
+                          </button>
+                          <button
+                            className="btn btn-outline"
+                            type="button"
+                            onClick={() => void deleteCommunityQuestion(item.id).then(refreshAll)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                ) : (
+                  <p className="muted">No pending questions.</p>
+                )}
+              </div>
+
+              <div className="notice">
+                <strong>Answers pending approval</strong>
+                {communityAnswers.filter((item) => item.status === "pending").length ? (
+                  communityAnswers
+                    .filter((item) => item.status === "pending")
+                    .map((item) => (
+                      <div key={`community-answer-${item.id}`} style={{ marginTop: "0.75rem" }}>
+                        <p>{item.answer}</p>
+                        <p className="muted">{item.authorName} | {new Date(item.createdAt).toLocaleString()}</p>
+                        <div className="form-actions">
+                          <button
+                            className="btn btn-outline"
+                            type="button"
+                            onClick={() => void updateCommunityAnswerStatus(item.id, "approved" as CommunityStatus).then(refreshAll)}
+                          >
+                            Approve
+                          </button>
+                          <button
+                            className="btn btn-outline"
+                            type="button"
+                            onClick={() => void updateCommunityAnswerStatus(item.id, "rejected" as CommunityStatus).then(refreshAll)}
+                          >
+                            Reject
+                          </button>
+                          <button
+                            className="btn btn-outline"
+                            type="button"
+                            onClick={() => void deleteCommunityAnswer(item.id).then(refreshAll)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                ) : (
+                  <p className="muted">No pending answers.</p>
+                )}
+              </div>
+            </div>
+          </section>
           <section className="admin-section admin-card" hidden={!isTabActive("seo")}>
             <h3>Theme, Logo, Preview and SEO Settings</h3>
             <p className="muted">Manage dark mode, global page side gap, logo, preview gate, Gemini helper and SEO defaults.</p>
@@ -1270,6 +1737,26 @@ export default function AdminPage() {
                 value={appearanceForm.layoutSideGap}
                 onChange={(event) => setAppearanceForm((prev) => ({ ...prev, layoutSideGap: event.target.value }))}
               />
+              <label>
+                <input
+                  type="checkbox"
+                  checked={appearanceForm.heroVideoSliderEnabled}
+                  onChange={(event) =>
+                    setAppearanceForm((prev) => ({ ...prev, heroVideoSliderEnabled: event.target.checked }))
+                  }
+                />
+                Show hero video slider
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={appearanceForm.heroImageSliderEnabled}
+                  onChange={(event) =>
+                    setAppearanceForm((prev) => ({ ...prev, heroImageSliderEnabled: event.target.checked }))
+                  }
+                />
+                Show hero image slider
+              </label>
               <select
                 value={appearanceForm.logoMode}
                 onChange={(event) =>
@@ -1308,6 +1795,16 @@ export default function AdminPage() {
                 value={appearanceForm.logoAccentText}
                 onChange={(event) => setAppearanceForm((prev) => ({ ...prev, logoAccentText: event.target.value }))}
               />
+              <label>
+                <input
+                  type="checkbox"
+                  checked={appearanceForm.communityApprovalEnabled}
+                  onChange={(event) =>
+                    setAppearanceForm((prev) => ({ ...prev, communityApprovalEnabled: event.target.checked }))
+                  }
+                />
+                Community requires approval before publish
+              </label>
               <label>
                 <input
                   type="checkbox"
@@ -1486,6 +1983,16 @@ export default function AdminPage() {
             </div>
           </section>
 
+          
+
+          
+
+          
+          
+
+          
+
+          
           <section className="admin-section admin-card" hidden={!isTabActive("seo")}>
             <h3>404 Redirect Settings</h3>
             <p className="muted">Configure where users should go from invalid URLs.</p>
@@ -2424,6 +2931,16 @@ export default function AdminPage() {
             </div>
           </section>
 
+          
+
+          
+
+          
+          
+
+          
+
+          
           <section className="admin-section admin-card" hidden={!isTabActive("seo")}>
             <h3>Third-Party Scripts</h3>
             <form className="form-grid" onSubmit={handleScriptSubmit}>
@@ -2522,6 +3039,26 @@ export default function AdminPage() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

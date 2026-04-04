@@ -135,12 +135,15 @@ export interface SiteSettings {
   liveTrackingEnabled: boolean;
   themeMode: "light" | "dark";
   layoutSideGap: number;
+  heroVideoSliderEnabled: boolean;
+  heroImageSliderEnabled: boolean;
   logoMode: "text" | "image";
   logoImageUrl: string;
   logoSize: number;
   logoTitleLine1: string;
   logoTitleLine2: string;
   logoAccentText: string;
+  communityApprovalEnabled: boolean;
   contentPreviewEnabled: boolean;
   contentPreviewPercent: number;
   defaultSeoTitle: string;
@@ -256,6 +259,69 @@ export interface AnalyticsSummary {
   shares: number;
   feedbackCount: number;
 }
+export interface CommunityCategory {
+  id: string;
+  name: string;
+  slug: string;
+  description: string;
+  order: number;
+  enabled: boolean;
+  updatedAt: string;
+}
+
+export type CommunityStatus = "approved" | "pending" | "rejected";
+
+export interface CommunityQuestion {
+  id: string;
+  categoryId: string;
+  authorName: string;
+  authorEmail: string;
+  authorUserId: string;
+  question: string;
+  status: CommunityStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CommunityAnswer {
+  id: string;
+  questionId: string;
+  categoryId: string;
+  authorName: string;
+  authorEmail: string;
+  authorUserId: string;
+  answer: string;
+  status: CommunityStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SocialLink {
+  id: string;
+  platform: string;
+  label: string;
+  url: string;
+  order: number;
+  enabled: boolean;
+  showInFooter: boolean;
+  showFloating: boolean;
+  updatedAt: string;
+}
+
+export interface VisitorEvent {
+  id: string;
+  visitorId: string;
+  country: string;
+  firstVisitedAt: string;
+  lastVisitedAt: string;
+  lastPath: string;
+}
+
+export interface VisitorAnalyticsSummary {
+  totalVisitors: number;
+  byDate: Array<{ date: string; count: number }>;
+  byCountry: Array<{ country: string; count: number }>;
+}
 
 
 
@@ -272,6 +338,7 @@ export interface LandingTopic {
   isPublished: boolean;
   updatedAt: string;
 }
+
 
 
 

@@ -1371,3 +1371,131 @@ html[data-theme="dark"] .nav-search::placeholder {
 
 
 
+
+.hero-inner-stacked {
+  grid-template-columns: 1fr;
+  gap: 1.4rem;
+}
+
+.hero-slider-top {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.visitor-count {
+  font-family: var(--fm);
+  font-size: 0.64rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  border: 1px solid var(--border);
+  padding: 0.35rem 0.55rem;
+  border-radius: 6px;
+  background: var(--bg);
+}
+
+.footer-social-row {
+  margin-top: 0.9rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.social-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.35rem 0.55rem;
+  background: var(--bg);
+  font-size: 0.74rem;
+}
+
+.social-link.floating {
+  width: 42px;
+  height: 42px;
+  justify-content: center;
+  border-radius: 12px;
+  padding: 0;
+}
+
+.social-mark {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--orange);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.58rem;
+  font-family: var(--fm);
+  text-transform: uppercase;
+}
+
+.social-floating {
+  position: fixed;
+  left: 0.8rem;
+  top: 45%;
+  transform: translateY(-50%);
+  display: grid;
+  gap: 0.45rem;
+  z-index: 28;
+}
+
+.community-toolbar {
+  margin-top: 1rem;
+  display: grid;
+  grid-template-columns: 220px 1fr auto;
+  gap: 0.65rem;
+}
+
+.community-toolbar input,
+.community-toolbar select {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  border-radius: 8px;
+  padding: 0.6rem 0.75rem;
+}
+
+.community-form {
+  margin-top: 1rem;
+}
+
+.community-list {
+  margin-top: 1.2rem;
+  display: grid;
+  gap: 0.85rem;
+}
+
+.community-card h3 {
+  margin: 0;
+  font-family: var(--fd);
+}
+
+.community-answers {
+  margin: 0.8rem 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.community-answer {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  padding: 0.6rem;
+}
+
+@media (max-width: 980px) {
+  .hero-slider-top,
+  .community-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .social-floating {
+    left: 0.45rem;
+    top: auto;
+    bottom: 1rem;
+    transform: none;
+  }
+}

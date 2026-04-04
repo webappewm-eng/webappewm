@@ -1,6 +1,7 @@
 import {
   Category,
   CertificateTemplate,
+  CommunityCategory,
   Course,
   CustomPage,
   HeroMediaItem,
@@ -8,6 +9,7 @@ import {
   NavigationLink,
   Post,
   SiteSettings,
+  SocialLink,
   Subtopic,
   ThirdPartyScript,
   Webinar
@@ -243,11 +245,21 @@ export const mockNavigationLinks: NavigationLink[] = [
     updatedAt: "2026-03-28"
   },
   {
+    id: "nav-header-community",
+    label: "Community",
+    href: "/community",
+    location: "header",
+    order: 3,
+    enabled: true,
+    openInNewTab: false,
+    updatedAt: "2026-03-28"
+  },
+  {
     id: "nav-header-subscribe",
     label: "Subscribe",
     href: "#subscribe",
     location: "header",
-    order: 3,
+    order: 4,
     enabled: true,
     openInNewTab: false,
     updatedAt: "2026-03-28"
@@ -284,17 +296,57 @@ export const mockNavigationLinks: NavigationLink[] = [
   }
 ];
 
+export const mockCommunityCategories: CommunityCategory[] = [
+  {
+    id: "community-general",
+    name: "General",
+    slug: "general",
+    description: "Ask any engineering learning question.",
+    order: 1,
+    enabled: true,
+    updatedAt: "2026-03-28"
+  }
+];
+
+export const mockSocialLinks: SocialLink[] = [
+  {
+    id: "social-youtube",
+    platform: "youtube",
+    label: "YouTube",
+    url: "https://youtube.com",
+    order: 1,
+    enabled: false,
+    showInFooter: true,
+    showFloating: true,
+    updatedAt: "2026-03-28"
+  },
+  {
+    id: "social-instagram",
+    platform: "instagram",
+    label: "Instagram",
+    url: "https://instagram.com",
+    order: 2,
+    enabled: false,
+    showInFooter: true,
+    showFloating: true,
+    updatedAt: "2026-03-28"
+  }
+];
+
 export const mockSiteSettings: SiteSettings = {
   id: "global",
   liveTrackingEnabled: true,
   themeMode: "light",
   layoutSideGap: 32,
+  heroVideoSliderEnabled: true,
+  heroImageSliderEnabled: true,
   logoMode: "text",
   logoImageUrl: "",
   logoSize: 38,
   logoTitleLine1: "Engineer",
   logoTitleLine2: "With",
   logoAccentText: "Me",
+  communityApprovalEnabled: true,
   contentPreviewEnabled: true,
   contentPreviewPercent: 20,
   defaultSeoTitle: "Engineer With Me",
@@ -310,12 +362,4 @@ export const mockSiteSettings: SiteSettings = {
   updatedAt: "2026-03-28"
 };
 
-
-
-
-
-
 export const mockLandingTopics: LandingTopic[] = [];
-
-
-

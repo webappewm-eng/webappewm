@@ -1,10 +1,10 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { logoutUser } from "@/lib/firebase/auth";
-import { getNavigationLinks, getSiteSettings } from "@/lib/firebase/data";
+import { getNavigationLinks, getSiteSettings, getVisitorAnalytics } from "@/lib/firebase/data";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { NavigationLink, SiteSettings } from "@/lib/types";
 
@@ -39,11 +39,22 @@ const fallbackHeaderLinks: NavigationLink[] = [
     updatedAt: ""
   },
   {
+    id: "fallback-header-community",
+    label: "Community",
+    href: "/community",
+    location: "header",
+    order: 3,
+    parentId: "",
+    enabled: true,
+    openInNewTab: false,
+    updatedAt: ""
+  },
+  {
     id: "fallback-header-subscribe",
     label: "Subscribe",
     href: "#subscribe",
     location: "header",
-    order: 3,
+    order: 4,
     parentId: "",
     enabled: true,
     openInNewTab: false,
@@ -145,6 +156,7 @@ export function Header({ onOpenLogin, searchValue = "", onSearchChange, showSear
   const [siteSettings, setSiteSettings] = useState(fallbackSiteSettings);
   const [themeMode, setThemeMode] = useState<"light" | "dark">("light");
   const [internalSearch, setInternalSearch] = useState(searchValue);
+  const [visitorCount, setVisitorCount] = useState(0);
 
   useEffect(() => {
     setInternalSearch(searchValue);
@@ -165,6 +177,25 @@ export function Header({ onOpenLogin, searchValue = "", onSearchChange, showSear
     void loadLinks();
   }, []);
 
+
+  useEffect(() => {
+    async function loadVisitorCount() {
+      try {
+        const analytics = await getVisitorAnalytics();
+        setVisitorCount(analytics.totalVisitors);
+      } catch {
+        setVisitorCount(0);
+      }
+    }
+
+    void loadVisitorCount();
+    const delayed = window.setTimeout(() => void loadVisitorCount(), 1500);
+    const timer = window.setInterval(() => void loadVisitorCount(), 30000);
+    return () => {
+      window.clearTimeout(delayed);
+      window.clearInterval(timer);
+    };
+  }, []);
   useEffect(() => {
     async function loadSettings() {
       try {
@@ -279,6 +310,7 @@ export function Header({ onOpenLogin, searchValue = "", onSearchChange, showSear
       </div>
 
       <div className="nav-links nav-actions">
+        <span className="visitor-count" title="Total visitors recorded">Visitors: {visitorCount}</span>
         <button className="nav-btn secondary" onClick={toggleTheme} type="button">
           {themeMode === "dark" ? "Light" : "Dark"}
         </button>
@@ -305,4 +337,7 @@ export function Header({ onOpenLogin, searchValue = "", onSearchChange, showSear
     </header>
   );
 }
+
+
+
 

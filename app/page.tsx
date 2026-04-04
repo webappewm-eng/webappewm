@@ -20,6 +20,8 @@ async function loadHomeData(): Promise<{
   webinars: Webinar[];
   courses: Course[];
   previewPercent: number;
+  heroVideoSliderEnabled: boolean;
+  heroImageSliderEnabled: boolean;
 }> {
   try {
     const [categories, subtopics, posts, videoSlides, imageSlides, webinars, courses, settings] = await Promise.all([
@@ -41,7 +43,9 @@ async function loadHomeData(): Promise<{
       imageSlides,
       webinars,
       courses,
-      previewPercent: settings.contentPreviewPercent
+      previewPercent: settings.contentPreviewPercent,
+      heroVideoSliderEnabled: settings.heroVideoSliderEnabled,
+      heroImageSliderEnabled: settings.heroImageSliderEnabled
     };
   } catch {
     return {
@@ -52,7 +56,9 @@ async function loadHomeData(): Promise<{
       imageSlides: [],
       webinars: [],
       courses: [],
-      previewPercent: 20
+      previewPercent: 20,
+      heroVideoSliderEnabled: true,
+      heroImageSliderEnabled: true
     };
   }
 }
@@ -75,6 +81,8 @@ export default async function HomePage({
       initialWebinars={data.webinars}
       initialCourses={data.courses}
       initialPreviewPercent={data.previewPercent}
+      initialHeroVideoSliderEnabled={data.heroVideoSliderEnabled}
+      initialHeroImageSliderEnabled={data.heroImageSliderEnabled}
       requestedCategory={firstParam(params.category).trim().toLowerCase()}
       requestedSubtopic={firstParam(params.subtopic).trim().toLowerCase()}
       requestedSearch={firstParam(params.search)}

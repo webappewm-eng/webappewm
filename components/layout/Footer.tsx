@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { getNavigationLinks, getSiteSettings, saveSubscription } from "@/lib/firebase/data";
-import { NavigationLink, SiteSettings } from "@/lib/types";
+import { getNavigationLinks, getSiteSettings, getSocialLinks, saveSubscription } from "@/lib/firebase/data";
+import { NavigationLink, SiteSettings, SocialLink } from "@/lib/types";
 
 const fallbackFooterLinks: NavigationLink[] = [
   {
@@ -80,11 +80,41 @@ function FooterLinkItem({ item, pathname }: { item: NavigationLink; pathname: st
   );
 }
 
+function getPlatformMark(platform: string, label: string): string {
+  const key = platform.trim().toLowerCase();
+  if (key === "youtube") return "YT";
+  if (key === "instagram") return "IG";
+  if (key === "linkedin") return "in";
+  if (key === "facebook") return "f";
+  if (key === "twitter" || key === "x") return "X";
+  if (key === "telegram") return "TG";
+  if (key === "whatsapp") return "WA";
+  return label.slice(0, 2).toUpperCase() || "SM";
+}
+
+function SocialItem({ item, floating = false }: { item: SocialLink; floating?: boolean }) {
+  return (
+    <a
+      className={`social-link ${floating ? "floating" : ""}`}
+      href={item.url}
+      target="_blank"
+      rel="noreferrer"
+      aria-label={item.label || item.platform}
+      title={item.label || item.platform}
+    >
+      <span className="social-mark">{getPlatformMark(item.platform, item.label)}</span>
+      {!floating ? <span>{item.label || item.platform}</span> : null}
+    </a>
+  );
+}
+
 export function Footer() {
   const pathname = usePathname();
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState("");
   const [footerLinks, setFooterLinks] = useState<NavigationLink[]>(fallbackFooterLinks);
+  const [footerSocialLinks, setFooterSocialLinks] = useState<SocialLink[]>([]);
+  const [floatingSocialLinks, setFloatingSocialLinks] = useState<SocialLink[]>([]);
   const [siteSettings, setSiteSettings] = useState(fallbackSiteSettings);
 
   useEffect(() => {
@@ -105,7 +135,12 @@ export function Footer() {
   useEffect(() => {
     async function loadSettings() {
       try {
-        const settings = await getSiteSettings();
+        const [settings, footerSocial, floatingSocial] = await Promise.all([
+          getSiteSettings(),
+          getSocialLinks("footer"),
+          getSocialLinks("floating")
+        ]);
+
         setSiteSettings({
           logoMode: settings.logoMode,
           logoImageUrl: settings.logoImageUrl,
@@ -114,8 +149,12 @@ export function Footer() {
           logoTitleLine2: settings.logoTitleLine2,
           logoAccentText: settings.logoAccentText
         });
+        setFooterSocialLinks(footerSocial);
+        setFloatingSocialLinks(floatingSocial);
       } catch {
         setSiteSettings(fallbackSiteSettings);
+        setFooterSocialLinks([]);
+        setFloatingSocialLinks([]);
       }
     }
 
@@ -146,69 +185,86 @@ export function Footer() {
   );
 
   return (
-    <footer className="footer" id="subscribe">
-      <div className="footer-inner">
-        <div>
-          <div className="logo">
-            <div className="logo-mark" style={logoSizeStyle}>
-              {siteSettings.logoMode === "image" && siteSettings.logoImageUrl ? (
-                <img className="logo-image" src={siteSettings.logoImageUrl} alt="Site logo" />
-              ) : (
-                <span className="logo-e">E</span>
-              )}
+    <>
+      {floatingSocialLinks.length ? (
+        <aside className="social-floating" aria-label="Social media links">
+          {floatingSocialLinks.map((item) => (
+            <SocialItem key={`floating-${item.id}`} item={item} floating />
+          ))}
+        </aside>
+      ) : null}
+
+      <footer className="footer" id="subscribe">
+        <div className="footer-inner">
+          <div>
+            <div className="logo">
+              <div className="logo-mark" style={logoSizeStyle}>
+                {siteSettings.logoMode === "image" && siteSettings.logoImageUrl ? (
+                  <img className="logo-image" src={siteSettings.logoImageUrl} alt="Site logo" />
+                ) : (
+                  <span className="logo-e">E</span>
+                )}
+              </div>
+              <div className="logo-text">
+                <span className="l1">{siteSettings.logoTitleLine1}</span>
+                <span className="l2">
+                  {siteSettings.logoTitleLine2} <span className="m">{siteSettings.logoAccentText}</span>
+                </span>
+              </div>
             </div>
-            <div className="logo-text">
-              <span className="l1">{siteSettings.logoTitleLine1}</span>
-              <span className="l2">
-                {siteSettings.logoTitleLine2} <span className="m">{siteSettings.logoAccentText}</span>
-              </span>
-            </div>
+            <p className="muted">Real Build. Real Code. Real Engineering.</p>
+            {footerSocialLinks.length ? (
+              <div className="footer-social-row">
+                {footerSocialLinks.map((item) => (
+                  <SocialItem key={`footer-social-${item.id}`} item={item} />
+                ))}
+              </div>
+            ) : null}
           </div>
-          <p className="muted">Real Build. Real Code. Real Engineering.</p>
+
+          <div>
+            <h4>Foundations</h4>
+            <ul>
+              <li>Science</li>
+              <li>Mathematics</li>
+              <li>Mechanical</li>
+              <li>Electronics</li>
+            </ul>
+          </div>
+
+          <div>
+            <h4>Pages</h4>
+            <ul>
+              {footerLinks.map((item) => (
+                <li key={item.id}>
+                  <FooterLinkItem item={item} pathname={pathname} />
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div>
+            <h4>Newsletter</h4>
+            <form className="subscription-form" onSubmit={handleSubscribe}>
+              <input
+                type="email"
+                placeholder="your@email.com"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+              />
+              <button type="submit" className="btn btn-primary">
+                Subscribe
+              </button>
+              {status ? <span className="muted">{status}</span> : null}
+            </form>
+          </div>
         </div>
 
-        <div>
-          <h4>Foundations</h4>
-          <ul>
-            <li>Science</li>
-            <li>Mathematics</li>
-            <li>Mechanical</li>
-            <li>Electronics</li>
-          </ul>
+        <div className="footer-bottom">
+          <span>(c) 2026 Engineer With Me</span>
+          <span>PWA enabled - Firebase powered</span>
         </div>
-
-        <div>
-          <h4>Pages</h4>
-          <ul>
-            {footerLinks.map((item) => (
-              <li key={item.id}>
-                <FooterLinkItem item={item} pathname={pathname} />
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div>
-          <h4>Newsletter</h4>
-          <form className="subscription-form" onSubmit={handleSubscribe}>
-            <input
-              type="email"
-              placeholder="your@email.com"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-            />
-            <button type="submit" className="btn btn-primary">
-              Subscribe
-            </button>
-            {status ? <span className="muted">{status}</span> : null}
-          </form>
-        </div>
-      </div>
-
-      <div className="footer-bottom">
-        <span>(c) 2026 Engineer With Me</span>
-        <span>PWA enabled - Firebase powered</span>
-      </div>
-    </footer>
+      </footer>
+    </>
   );
 }

@@ -18,6 +18,11 @@ service cloud.firestore {
       );
     }
 
+    function communityApprovalEnabled() {
+      return exists(/databases/$(database)/documents/site_settings/global)
+        && get(/databases/$(database)/documents/site_settings/global).data.communityApprovalEnabled == true;
+    }
+
     match /categories/{docId} {
       allow read: if true;
       allow write: if isAdmin();
@@ -53,11 +58,11 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
-
     match /landing_topics/{docId} {
       allow read: if resource.data.isPublished == true || isAdmin();
       allow write: if isAdmin();
     }
+
     match /third_party_scripts/{docId} {
       allow read: if true;
       allow write: if isAdmin();
@@ -71,6 +76,36 @@ service cloud.firestore {
     match /hero_media/{docId} {
       allow read: if true;
       allow write: if isAdmin();
+    }
+
+    match /community_categories/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /community_questions/{docId} {
+      allow read: if isAdmin() || !communityApprovalEnabled() || resource.data.status == "approved";
+      allow create: if request.resource.data.question is string && request.resource.data.categoryId is string;
+      allow update, delete: if isAdmin();
+    }
+
+    match /community_answers/{docId} {
+      allow read: if isAdmin() || !communityApprovalEnabled() || resource.data.status == "approved";
+      allow create: if request.resource.data.answer is string
+        && request.resource.data.categoryId is string
+        && request.resource.data.questionId is string;
+      allow update, delete: if isAdmin();
+    }
+
+    match /social_links/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /visitor_events/{docId} {
+      allow create, update: if true;
+      allow read: if true;
+      allow delete: if isAdmin();
     }
 
     match /notifications/{docId} {
@@ -133,4 +168,7 @@ service cloud.firestore {
     }
   }
 }
+
+
+
 

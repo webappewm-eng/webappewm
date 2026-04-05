@@ -49,6 +49,7 @@ import {
   getNotifications,
   getNavigationLinksForAdmin,
   getSocialLinksForAdmin,
+  seedDefaultSocialLinks,
   getPosts,
   getSiteSettings,
   getSubtopics,
@@ -356,15 +357,17 @@ export default function AdminPage() {
   const [landingTopicForm, setLandingTopicForm] = useState(emptyLandingTopicForm);
   const [landingTopicEditingId, setLandingTopicEditingId] = useState("");
 
-  const [scriptForm, setScriptForm] = useState({ name: "", src: "", location: "body" as "head" | "body" });
+  const [scriptForm, setScriptForm] = useState({ name: "", src: "", inlineCode: "", location: "body" as "head" | "body" });
   const [heroMedia, setHeroMedia] = useState<HeroMediaItem[]>([]);
   const [heroForm, setHeroForm] = useState({
     section: "video" as HeroMediaItem["section"],
     title: "",
     source: "",
+    redirectUrl: "",
     order: "1",
     enabled: true
   });
+  const [heroBulkRedirectLinks, setHeroBulkRedirectLinks] = useState("");
   const [heroEditingId, setHeroEditingId] = useState("");
 
   const [appearanceForm, setAppearanceForm] = useState({
@@ -848,12 +851,27 @@ export default function AdminPage() {
   async function handleScriptSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    await createThirdPartyScript({
-      ...scriptForm,
+    const payload = {
+      name: scriptForm.name.trim(),
+      src: scriptForm.src.trim(),
+      inlineCode: scriptForm.inlineCode.trim(),
+      location: scriptForm.location,
       enabled: true
-    });
+    };
 
-    setScriptForm({ name: "", src: "", location: "body" });
+    if (!payload.name) {
+      setStatus("Script name is required.");
+      return;
+    }
+
+    if (!payload.src && !payload.inlineCode) {
+      setStatus("Add script URL or inline code.");
+      return;
+    }
+
+    await createThirdPartyScript(payload);
+
+    setScriptForm({ name: "", src: "", inlineCode: "", location: "body" });
     setStatus("Script added.");
     await refreshAll();
   }
@@ -917,6 +935,10 @@ export default function AdminPage() {
         })
       );
 
+      const redirectLinks = heroBulkRedirectLinks
+        .split(/\r?\n/)
+        .map((item) => item.trim())
+        .filter(Boolean);
       const currentMaxOrder = heroMedia.reduce((max, item) => Math.max(max, item.order), 0);
 
       await Promise.all(
@@ -928,12 +950,14 @@ export default function AdminPage() {
             section,
             title: nameWithoutExtension || `Hero media ${currentMaxOrder + index + 1}`,
             source: url,
+            redirectUrl: redirectLinks[index] ?? "",
             order: currentMaxOrder + index + 1,
             enabled: true
           });
         })
       );
 
+      setHeroBulkRedirectLinks("");
       setStatus(`${uploads.length} hero media item(s) created successfully.`);
       setUploadStatus(`${uploads.length} file(s) uploaded and added to slider.`);
       await refreshAll();
@@ -951,6 +975,7 @@ export default function AdminPage() {
       section: heroForm.section,
       title: heroForm.title.trim(),
       source: heroForm.source.trim(),
+      redirectUrl: heroForm.redirectUrl.trim(),
       order: Number(heroForm.order || "0"),
       enabled: heroForm.enabled
     };
@@ -968,7 +993,7 @@ export default function AdminPage() {
       setStatus("Hero media created.");
     }
 
-    setHeroForm({ section: "video", title: "", source: "", order: "1", enabled: true });
+    setHeroForm({ section: "video", title: "", source: "", redirectUrl: "", order: "1", enabled: true });
     setHeroEditingId("");
     await refreshAll();
   }
@@ -1181,6 +1206,21 @@ export default function AdminPage() {
     setSocialForm(emptySocialForm);
     await refreshAll();
   }
+
+  async function handleSeedDefaultSocialLinks() {
+    const added = await seedDefaultSocialLinks();
+    setStatus(added ? `${added} default social link(s) added.` : "Default social links are already present.");
+    await refreshAll();
+  }
+
+  async function handleCommunityApprovalToggle() {
+    const nextValue = !settings.communityApprovalEnabled;
+    await updateSiteAppearanceSettings({ communityApprovalEnabled: nextValue });
+    setAppearanceForm((prev) => ({ ...prev, communityApprovalEnabled: nextValue }));
+    setStatus(`Community approval ${nextValue ? "enabled" : "disabled"}.`);
+    await refreshAll();
+  }
+
   async function handleNotFoundSettingsSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -1478,6 +1518,11 @@ export default function AdminPage() {
           <section className="admin-section admin-card" hidden={!isTabActive("general")}>
             <h3>Social Links (Footer + Floating)</h3>
             <p className="muted">Manage social media links shown in footer and floating left icons.</p>
+            <div className="form-actions" style={{ marginBottom: "0.65rem" }}>
+              <button className="btn btn-outline" type="button" onClick={() => void handleSeedDefaultSocialLinks()}>
+                Add Missing Default Social Platforms
+              </button>
+            </div>
             <form className="form-grid" onSubmit={handleSocialLinkSubmit}>
               <input
                 placeholder="Platform (youtube, instagram, x, linkedin...)"
@@ -1598,6 +1643,16 @@ export default function AdminPage() {
 
           <section className="admin-section admin-card" hidden={!isTabActive("engagement")}>
             <h3>Community Categories and Moderation</h3>
+            <div className="notice" style={{ marginBottom: "0.8rem" }}>
+              <p className="muted" style={{ marginTop: 0 }}>
+                Approval mode is currently <strong>{settings.communityApprovalEnabled ? "enabled" : "disabled"}</strong>.
+              </p>
+              <div className="form-actions">
+                <button className="btn btn-outline" type="button" onClick={() => void handleCommunityApprovalToggle()}>
+                  {settings.communityApprovalEnabled ? "Disable Approval (Instant Publish)" : "Enable Approval"}
+                </button>
+              </div>
+            </div>
             <form className="form-grid" onSubmit={handleCommunityCategorySubmit}>
               <input
                 placeholder="Category name"
@@ -1960,7 +2015,18 @@ export default function AdminPage() {
                 onChange={(event) => setHeroForm((prev) => ({ ...prev, source: event.target.value }))}
                 required
               />
+              <input
+                placeholder="Redirect link (optional)"
+                value={heroForm.redirectUrl}
+                onChange={(event) => setHeroForm((prev) => ({ ...prev, redirectUrl: event.target.value }))}
+              />
               <input type="file" accept="image/*,video/*" onChange={handleHeroMediaFileUpload} />
+              <textarea
+                rows={3}
+                placeholder="Bulk redirect links (optional, one link per line in upload order)"
+                value={heroBulkRedirectLinks}
+                onChange={(event) => setHeroBulkRedirectLinks(event.target.value)}
+              />
               <input type="file" accept="image/*,video/*" multiple onChange={handleHeroMediaMultiUpload} />
               <input
                 type="number"
@@ -1987,7 +2053,7 @@ export default function AdminPage() {
                     type="button"
                     onClick={() => {
                       setHeroEditingId("");
-                      setHeroForm({ section: "video", title: "", source: "", order: "1", enabled: true });
+                      setHeroForm({ section: "video", title: "", source: "", redirectUrl: "", order: "1", enabled: true });
                     }}
                   >
                     Cancel Edit
@@ -2005,6 +2071,7 @@ export default function AdminPage() {
                       {item.section} | order {item.order} | {item.enabled ? "enabled" : "disabled"}
                     </p>
                     <p className="muted">{item.source}</p>
+                    <p className="muted">Redirect: {item.redirectUrl || "none"}</p>
                     <div className="form-actions">
                       <button
                         className="btn btn-outline"
@@ -2015,6 +2082,7 @@ export default function AdminPage() {
                             section: item.section,
                             title: item.title,
                             source: item.source,
+                            redirectUrl: item.redirectUrl ?? "",
                             order: String(item.order),
                             enabled: item.enabled
                           });
@@ -2998,9 +3066,25 @@ export default function AdminPage() {
 
           <section className="admin-section admin-card" hidden={!isTabActive("seo")}>
             <h3>Third-Party Scripts</h3>
+            <p className="muted">Add external script URL, inline script code, or both.</p>
             <form className="form-grid" onSubmit={handleScriptSubmit}>
-              <input placeholder="Script name" value={scriptForm.name} onChange={(event) => setScriptForm((prev) => ({ ...prev, name: event.target.value }))} required />
-              <input placeholder="https://example.com/script.js" value={scriptForm.src} onChange={(event) => setScriptForm((prev) => ({ ...prev, src: event.target.value }))} required />
+              <input
+                placeholder="Script name"
+                value={scriptForm.name}
+                onChange={(event) => setScriptForm((prev) => ({ ...prev, name: event.target.value }))}
+                required
+              />
+              <input
+                placeholder="https://example.com/script.js (optional)"
+                value={scriptForm.src}
+                onChange={(event) => setScriptForm((prev) => ({ ...prev, src: event.target.value }))}
+              />
+              <textarea
+                rows={5}
+                placeholder="Inline script code (optional)"
+                value={scriptForm.inlineCode}
+                onChange={(event) => setScriptForm((prev) => ({ ...prev, inlineCode: event.target.value }))}
+              />
               <select value={scriptForm.location} onChange={(event) => setScriptForm((prev) => ({ ...prev, location: event.target.value as "head" | "body" }))}>
                 <option value="head">Head</option>
                 <option value="body">Body</option>
@@ -3011,7 +3095,9 @@ export default function AdminPage() {
               {scripts.length ? scripts.map((item) => (
                 <div className="notice" key={item.id}>
                   <strong>{item.name}</strong>
-                  <p className="muted">{item.src}</p>
+                  {item.src ? <p className="muted">Source: {item.src}</p> : null}
+                  {item.inlineCode ? <p className="muted">Inline code: {item.inlineCode.slice(0, 120)}{item.inlineCode.length > 120 ? "..." : ""}</p> : null}
+                  {!item.src && !item.inlineCode ? <p className="muted">No script content provided.</p> : null}
                   <div className="form-actions">
                     <button className="btn btn-outline" type="button" onClick={() => void updateThirdPartyScript(item.id, { enabled: !item.enabled }).then(refreshAll)}>{item.enabled ? "Disable" : "Enable"}</button>
                     <button className="btn btn-outline" type="button" onClick={() => void deleteThirdPartyScript(item.id).then(refreshAll)}>Delete</button>
@@ -3094,3 +3180,16 @@ export default function AdminPage() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+

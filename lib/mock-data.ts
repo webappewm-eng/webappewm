@@ -121,6 +121,7 @@ export const mockHeroMedia: HeroMediaItem[] = [
     source: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
     order: 1,
     enabled: true,
+    redirectUrl: "",
     updatedAt: "2026-03-28"
   },
   {
@@ -130,6 +131,7 @@ export const mockHeroMedia: HeroMediaItem[] = [
     source: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.webm",
     order: 2,
     enabled: true,
+    redirectUrl: "",
     updatedAt: "2026-03-28"
   },
   {
@@ -139,6 +141,7 @@ export const mockHeroMedia: HeroMediaItem[] = [
     source: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=1400&q=80",
     order: 1,
     enabled: true,
+    redirectUrl: "",
     updatedAt: "2026-03-28"
   },
   {
@@ -148,6 +151,7 @@ export const mockHeroMedia: HeroMediaItem[] = [
     source: "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1400&q=80",
     order: 2,
     enabled: true,
+    redirectUrl: "",
     updatedAt: "2026-03-28"
   },
   {
@@ -157,6 +161,7 @@ export const mockHeroMedia: HeroMediaItem[] = [
     source: "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1400&q=80",
     order: 3,
     enabled: true,
+    redirectUrl: "",
     updatedAt: "2026-03-28"
   }
 ];
@@ -309,28 +314,16 @@ export const mockCommunityCategories: CommunityCategory[] = [
 ];
 
 export const mockSocialLinks: SocialLink[] = [
-  {
-    id: "social-youtube",
-    platform: "youtube",
-    label: "YouTube",
-    url: "https://youtube.com",
-    order: 1,
-    enabled: false,
-    showInFooter: true,
-    showFloating: true,
-    updatedAt: "2026-03-28"
-  },
-  {
-    id: "social-instagram",
-    platform: "instagram",
-    label: "Instagram",
-    url: "https://instagram.com",
-    order: 2,
-    enabled: false,
-    showInFooter: true,
-    showFloating: true,
-    updatedAt: "2026-03-28"
-  }
+  { id: "social-youtube", platform: "youtube", label: "YouTube", url: "https://youtube.com", order: 1, enabled: false, showInFooter: true, showFloating: true, updatedAt: "2026-03-28" },
+  { id: "social-facebook", platform: "facebook", label: "Facebook", url: "https://facebook.com", order: 2, enabled: false, showInFooter: true, showFloating: true, updatedAt: "2026-03-28" },
+  { id: "social-x", platform: "x", label: "X", url: "https://x.com", order: 3, enabled: false, showInFooter: true, showFloating: true, updatedAt: "2026-03-28" },
+  { id: "social-instagram", platform: "instagram", label: "Instagram", url: "https://instagram.com", order: 4, enabled: false, showInFooter: true, showFloating: true, updatedAt: "2026-03-28" },
+  { id: "social-telegram", platform: "telegram", label: "Telegram", url: "https://t.me", order: 5, enabled: false, showInFooter: true, showFloating: true, updatedAt: "2026-03-28" },
+  { id: "social-linkedin", platform: "linkedin", label: "LinkedIn", url: "https://linkedin.com", order: 6, enabled: false, showInFooter: true, showFloating: true, updatedAt: "2026-03-28" },
+  { id: "social-whatsapp", platform: "whatsapp", label: "WhatsApp", url: "https://wa.me", order: 7, enabled: false, showInFooter: true, showFloating: true, updatedAt: "2026-03-28" },
+  { id: "social-discord", platform: "discord", label: "Discord", url: "https://discord.com", order: 8, enabled: false, showInFooter: true, showFloating: true, updatedAt: "2026-03-28" },
+  { id: "social-github", platform: "github", label: "GitHub", url: "https://github.com", order: 9, enabled: false, showInFooter: true, showFloating: false, updatedAt: "2026-03-28" },
+  { id: "social-website", platform: "website", label: "Website", url: "https://webappewm.vercel.app", order: 10, enabled: false, showInFooter: true, showFloating: false, updatedAt: "2026-03-28" }
 ];
 
 export const mockSiteSettings: SiteSettings = {

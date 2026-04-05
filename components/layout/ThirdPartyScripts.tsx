@@ -17,14 +17,26 @@ export function ThirdPartyScripts() {
         .filter((item) => item.enabled)
         .forEach((item) => {
           const marker = `ewm-script-${item.id}`;
-          if (document.querySelector(`script[data-ewm-id=\"${marker}\"]`)) {
+          if (document.querySelector(`script[data-ewm-id="${marker}"]`)) {
+            return;
+          }
+
+          const src = item.src.trim();
+          const inlineCode = item.inlineCode.trim();
+          if (!src && !inlineCode) {
             return;
           }
 
           const script = document.createElement("script");
-          script.src = item.src;
-          script.async = true;
           script.dataset.ewmId = marker;
+
+          if (src) {
+            script.src = src;
+            script.async = true;
+          } else {
+            script.textContent = inlineCode;
+          }
+
           const target = item.location === "head" ? document.head : document.body;
           target.appendChild(script);
         });

@@ -153,6 +153,10 @@ function getSafeImageSrc(value: string | undefined): string {
   return FALLBACK_POST_IMAGE;
 }
 
+function isExternalHref(value: string): boolean {
+  return /^https?:\/\//i.test(value);
+}
+
 interface HomePageClientProps {
   initialCategories: Category[];
   initialSubtopics: Subtopic[];
@@ -338,6 +342,88 @@ export default function HomePageClient({
 
         <section className="hero">
           <div className="hero-inner hero-inner-stacked">
+            {activeHeroSlides ? (
+              <div className="hero-slider-wrap hero-slider-top hero-slider-full">
+                {heroVideoSliderEnabled ? (
+                  <div className="slider-box">
+                    <div className="slide slide-hero-wide">
+                      {currentVideoSlide ? (
+                        currentVideoSlide.redirectUrl ? (
+                          isExternalHref(currentVideoSlide.redirectUrl) ? (
+                            <a className="slide-media-link" href={currentVideoSlide.redirectUrl} target="_blank" rel="noreferrer">
+                              <video key={currentVideoSlide.id} src={currentVideoSlide.source} autoPlay muted loop playsInline />
+                              <span className="slide-caption">{currentVideoSlide.title}</span>
+                            </a>
+                          ) : (
+                            <Link className="slide-media-link" href={currentVideoSlide.redirectUrl}>
+                              <video key={currentVideoSlide.id} src={currentVideoSlide.source} autoPlay muted loop playsInline />
+                              <span className="slide-caption">{currentVideoSlide.title}</span>
+                            </Link>
+                          )
+                        ) : (
+                          <>
+                            <video key={currentVideoSlide.id} src={currentVideoSlide.source} autoPlay muted loop playsInline />
+                            <span className="slide-caption">{currentVideoSlide.title}</span>
+                          </>
+                        )
+                      ) : (
+                        <div className="notice">No video media configured yet.</div>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+
+                {heroImageSliderEnabled ? (
+                  <div className="slider-box">
+                    <div className="slide slide-hero-wide">
+                      {currentImageSlide ? (
+                        currentImageSlide.redirectUrl ? (
+                          isExternalHref(currentImageSlide.redirectUrl) ? (
+                            <a className="slide-media-link" href={currentImageSlide.redirectUrl} target="_blank" rel="noreferrer">
+                              <Image
+                                key={currentImageSlide.id}
+                                src={currentImageSlide.source}
+                                alt={currentImageSlide.title}
+                                width={1600}
+                                height={900}
+                              />
+                              <span className="slide-caption">{currentImageSlide.title}</span>
+                            </a>
+                          ) : (
+                            <Link className="slide-media-link" href={currentImageSlide.redirectUrl}>
+                              <Image
+                                key={currentImageSlide.id}
+                                src={currentImageSlide.source}
+                                alt={currentImageSlide.title}
+                                width={1600}
+                                height={900}
+                              />
+                              <span className="slide-caption">{currentImageSlide.title}</span>
+                            </Link>
+                          )
+                        ) : (
+                          <>
+                            <Image
+                              key={currentImageSlide.id}
+                              src={currentImageSlide.source}
+                              alt={currentImageSlide.title}
+                              width={1600}
+                              height={900}
+                            />
+                            <span className="slide-caption">{currentImageSlide.title}</span>
+                          </>
+                        )
+                      ) : (
+                        <div className="notice">No image media configured yet.</div>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <div className="notice">Hero media sliders are currently disabled in admin settings.</div>
+            )}
+
             <div className="hero-main-row">
               <div>
                 <div className="hero-tag">Where engineers are made</div>
@@ -381,46 +467,6 @@ export default function HomePageClient({
                 </div>
               </div>
             </div>
-
-            {activeHeroSlides ? (
-              <div className={`hero-slider-wrap hero-slider-top ${activeHeroSlides > 1 ? "hero-slider-dual" : "hero-slider-single"}`}>
-                {heroVideoSliderEnabled ? (
-                  <div className="slider-box">
-                    <p className="slider-label">Video Slider</p>
-                    <div className="slide">
-                      {currentVideoSlide ? (
-                        <video key={currentVideoSlide.id} src={currentVideoSlide.source} autoPlay muted loop playsInline />
-                      ) : (
-                        <div className="notice">No video media configured yet.</div>
-                      )}
-                      {currentVideoSlide ? <span className="slide-caption">{currentVideoSlide.title}</span> : null}
-                    </div>
-                  </div>
-                ) : null}
-
-                {heroImageSliderEnabled ? (
-                  <div className="slider-box">
-                    <p className="slider-label">Image Slider</p>
-                    <div className="slide">
-                      {currentImageSlide ? (
-                        <Image
-                          key={currentImageSlide.id}
-                          src={currentImageSlide.source}
-                          alt={currentImageSlide.title}
-                          width={1200}
-                          height={800}
-                        />
-                      ) : (
-                        <div className="notice">No image media configured yet.</div>
-                      )}
-                      {currentImageSlide ? <span className="slide-caption">{currentImageSlide.title}</span> : null}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            ) : (
-              <div className="notice">Hero media sliders are currently disabled in admin settings.</div>
-            )}
           </div>
         </section>
 
@@ -656,3 +702,4 @@ export default function HomePageClient({
     </div>
   );
 }
+

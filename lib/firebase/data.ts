@@ -157,6 +157,18 @@ function normalizeCommunityStatus(value: unknown): CommunityStatus {
   return "pending";
 }
 
+function normalizeOptionalLink(value: unknown): string {
+  const next = String(value ?? "").trim();
+  if (!next) {
+    return "";
+  }
+
+  if (/^https?:\/\//i.test(next) || next.startsWith("#")) {
+    return next;
+  }
+
+  return next.startsWith("/") ? next : `/${next}`;
+}
 function normalizeUrl(value: unknown): string {
   const next = String(value ?? "").trim();
   if (!next) {
@@ -719,23 +731,32 @@ export async function getThirdPartyScripts(): Promise<ThirdPartyScript[]> {
     const data = item.data() as Record<string, unknown>;
     return {
       id: item.id,
-      name: String(data.name ?? ""),
-      src: String(data.src ?? ""),
+      name: String(data.name ?? "").trim(),
+      src: String(data.src ?? "").trim(),
+      inlineCode: String(data.inlineCode ?? "").trim(),
       location: data.location === "head" ? "head" : "body",
-      enabled: Boolean(data.enabled),
+      enabled: data.enabled !== false,
       updatedAt: normalizeDate(data.updatedAt)
     };
   });
 }
 
 export async function createThirdPartyScript(input: Omit<ThirdPartyScript, "id" | "updatedAt">): Promise<void> {
+  const payload = {
+    name: String(input.name ?? "").trim(),
+    src: String(input.src ?? "").trim(),
+    inlineCode: String(input.inlineCode ?? "").trim(),
+    location: input.location === "head" ? "head" : "body",
+    enabled: input.enabled !== false
+  } as const;
+
   if (!hasFirebaseConfig || !db) {
-    localStore.scripts.unshift({ id: `script-${Date.now()}`, ...input, updatedAt: new Date().toISOString() });
+    localStore.scripts.unshift({ id: `script-${Date.now()}`, ...payload, updatedAt: new Date().toISOString() });
     return;
   }
 
   await addDoc(collection(db, "third_party_scripts"), {
-    ...input,
+    ...payload,
     updatedAt: serverTimestamp()
   });
 }
@@ -744,15 +765,23 @@ export async function updateThirdPartyScript(
   id: string,
   input: Partial<Omit<ThirdPartyScript, "id" | "updatedAt">>
 ): Promise<void> {
+  const payload: Partial<Omit<ThirdPartyScript, "id" | "updatedAt">> = {
+    ...input,
+    ...(typeof input.name === "string" ? { name: String(input.name).trim() } : {}),
+    ...(typeof input.src === "string" ? { src: String(input.src).trim() } : {}),
+    ...(typeof input.inlineCode === "string" ? { inlineCode: String(input.inlineCode).trim() } : {}),
+    ...(input.location === "head" || input.location === "body" ? { location: input.location } : {})
+  };
+
   if (!hasFirebaseConfig || !db) {
     localStore.scripts = localStore.scripts.map((item) =>
-      item.id === id ? { ...item, ...input, updatedAt: new Date().toISOString() } : item
+      item.id === id ? { ...item, ...payload, updatedAt: new Date().toISOString() } : item
     );
     return;
   }
 
   await updateDoc(doc(db, "third_party_scripts", id), {
-    ...input,
+    ...payload,
     updatedAt: serverTimestamp()
   });
 }
@@ -894,10 +923,11 @@ export async function getHeroMedia(section?: HeroMediaItem["section"]): Promise<
       return {
         id: item.id,
         section: data.section === "video" ? "video" : "image",
-        title: String(data.title ?? ""),
-        source: String(data.source ?? ""),
+        title: String(data.title ?? "").trim(),
+        source: String(data.source ?? "").trim(),
         order: Number(data.order ?? 0),
         enabled: data.enabled !== false,
+        redirectUrl: normalizeOptionalLink(data.redirectUrl),
         updatedAt: normalizeDate(data.updatedAt)
       } as HeroMediaItem;
     });
@@ -915,10 +945,11 @@ export async function getHeroMediaForAdmin(): Promise<HeroMediaItem[]> {
   const mapDoc = (data: Record<string, unknown>, id: string): HeroMediaItem => ({
     id,
     section: data.section === "video" ? "video" : "image",
-    title: String(data.title ?? ""),
-    source: String(data.source ?? ""),
+    title: String(data.title ?? "").trim(),
+    source: String(data.source ?? "").trim(),
     order: Number(data.order ?? 0),
     enabled: data.enabled !== false,
+    redirectUrl: normalizeOptionalLink(data.redirectUrl),
     updatedAt: normalizeDate(data.updatedAt)
   });
 
@@ -930,30 +961,51 @@ export async function getHeroMediaForAdmin(): Promise<HeroMediaItem[]> {
     return sortByOrder(snap.docs.map((item) => mapDoc(item.data() as Record<string, unknown>, item.id)));
   }
 }
+
 export async function createHeroMedia(input: Omit<HeroMediaItem, "id" | "updatedAt">): Promise<void> {
+  const payload = {
+    section: input.section === "video" ? "video" : "image",
+    title: String(input.title ?? "").trim(),
+    source: String(input.source ?? "").trim(),
+    order: Number(input.order ?? 0),
+    enabled: input.enabled !== false,
+    redirectUrl: normalizeOptionalLink(input.redirectUrl)
+  } as const;
+
   if (!hasFirebaseConfig || !db) {
-    localStore.heroMedia.push({ id: `hero-${Date.now()}`, ...input, updatedAt: new Date().toISOString() });
+    localStore.heroMedia.push({ id: `hero-${Date.now()}`, ...payload, updatedAt: new Date().toISOString() });
     return;
   }
 
   await addDoc(collection(db, "hero_media"), {
-    ...input,
+    ...payload,
     updatedAt: serverTimestamp()
   });
 }
+
 export async function updateHeroMedia(
   id: string,
   input: Partial<Omit<HeroMediaItem, "id" | "updatedAt">>
 ): Promise<void> {
+  const payload: Partial<Omit<HeroMediaItem, "id" | "updatedAt">> = {
+    ...input,
+    ...(input.section === "video" || input.section === "image" ? { section: input.section } : {}),
+    ...(typeof input.title === "string" ? { title: String(input.title).trim() } : {}),
+    ...(typeof input.source === "string" ? { source: String(input.source).trim() } : {}),
+    ...(typeof input.order === "number" ? { order: Number(input.order) } : {}),
+    ...(typeof input.enabled === "boolean" ? { enabled: input.enabled } : {}),
+    ...(typeof input.redirectUrl === "string" ? { redirectUrl: normalizeOptionalLink(input.redirectUrl) } : {})
+  };
+
   if (!hasFirebaseConfig || !db) {
     localStore.heroMedia = localStore.heroMedia.map((item) =>
-      item.id === id ? { ...item, ...input, updatedAt: new Date().toISOString() } : item
+      item.id === id ? { ...item, ...payload, updatedAt: new Date().toISOString() } : item
     );
     return;
   }
 
   await updateDoc(doc(db, "hero_media", id), {
-    ...input,
+    ...payload,
     updatedAt: serverTimestamp()
   });
 }
@@ -1119,7 +1171,7 @@ export async function updateNotFoundSettings(input: {
   );
 }
 
-export async function updateSiteAppearanceSettings(input: {
+export async function updateSiteAppearanceSettings(input: Partial<{
   themeMode: SiteSettings["themeMode"];
   layoutSideGap: number;
   heroVideoSliderEnabled: boolean;
@@ -1140,7 +1192,7 @@ export async function updateSiteAppearanceSettings(input: {
   robotsIndexable: boolean;
   geminiEnabled: boolean;
   geminiModel: string;
-}): Promise<void> {
+}>): Promise<void> {
   const normalized = normalizeSiteSettings({ ...localStore.siteSettings, ...input });
 
   if (!hasFirebaseConfig || !db) {
@@ -1932,6 +1984,55 @@ function mapVisitorDoc(data: Record<string, unknown>, id: string): VisitorEvent 
   };
 }
 
+export async function seedDefaultSocialLinks(): Promise<number> {
+  const defaults = sortByOrder(mockSocialLinks).map((item) => ({
+    platform: sanitizeString(item.platform).toLowerCase(),
+    label: sanitizeString(item.label),
+    url: normalizeUrl(item.url),
+    order: Number(item.order ?? 0),
+    enabled: item.enabled !== false,
+    showInFooter: item.showInFooter !== false,
+    showFloating: item.showFloating !== false
+  }));
+
+  if (!hasFirebaseConfig || !db) {
+    const existing = new Set(localStore.socialLinks.map((item) => item.platform.toLowerCase()));
+    const additions = defaults.filter((item) => !existing.has(item.platform));
+
+    additions.forEach((item) => {
+      localStore.socialLinks.push({
+        id: "social-" + Date.now() + "-" + Math.random().toString(16).slice(2, 8),
+        ...item,
+        updatedAt: new Date().toISOString()
+      });
+    });
+
+    return additions.length;
+  }
+
+  const socialLinksCollection = collection(db, "social_links");
+  const snap = await getDocs(socialLinksCollection);
+  const existing = new Set(
+    snap.docs.map((docItem) => sanitizeString((docItem.data() as Record<string, unknown>).platform).toLowerCase())
+  );
+  const additions = defaults.filter((item) => !existing.has(item.platform));
+
+  if (!additions.length) {
+    return 0;
+  }
+
+  await Promise.all(
+    additions.map((item) =>
+      addDoc(socialLinksCollection, {
+        ...item,
+        updatedAt: serverTimestamp()
+      })
+    )
+  );
+
+  return additions.length;
+}
+
 export async function getSocialLinks(location?: "footer" | "floating"): Promise<SocialLink[]> {
   const applyFilter = (rows: SocialLink[]) => {
     let filtered = rows.filter((item) => item.enabled);
@@ -1958,6 +2059,7 @@ export async function getSocialLinksForAdmin(): Promise<SocialLink[]> {
     return sortByOrder(localStore.socialLinks);
   }
 
+  await seedDefaultSocialLinks();
   const snap = await getDocs(collection(db, "social_links"));
   return sortByOrder(snap.docs.map((item) => mapSocialLinkDoc(item.data() as Record<string, unknown>, item.id)));
 }
@@ -2379,5 +2481,4 @@ export async function getVisitorAnalytics(): Promise<VisitorAnalyticsSummary> {
     byCountry
   };
 }
-
 

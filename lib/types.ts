@@ -41,6 +41,7 @@ export interface HeroMediaItem {
   source: string;
   order: number;
   enabled: boolean;
+  redirectUrl?: string;
   updatedAt: string;
 }
 
@@ -88,6 +89,7 @@ export interface ThirdPartyScript {
   id: string;
   name: string;
   src: string;
+  inlineCode: string;
   location: "head" | "body";
   enabled: boolean;
   updatedAt: string;
@@ -338,6 +340,7 @@ export interface LandingTopic {
   isPublished: boolean;
   updatedAt: string;
 }
+
 
 
 

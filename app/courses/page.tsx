@@ -56,58 +56,56 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
     <div className="app-shell">
       <Header />
       <main className="page-main">
-        <div className="page-wrap">
+        <section className="section courses-page-shell">
           <p className="breadcrumb">
             <Link href="/">Home</Link> / Courses
           </p>
 
-          <section className="section" style={{ paddingInline: 0, paddingTop: "0.5rem" }}>
-            <div className="label">Certification</div>
-            <h1 className="h2">Courses and Certification Programs</h1>
-            <p className="body-txt">Complete lessons, unlock tests, and download certificates.</p>
+          <div className="label">Certification</div>
+          <h1 className="h2">Courses and Certification Programs</h1>
+          <p className="body-txt">Complete lessons, unlock tests, and download certificates.</p>
 
-            <div className="form-actions" style={{ marginTop: "0.75rem", flexWrap: "wrap" }}>
-              {enabledTypes.map((typeItem) => {
-                const href = `/courses?type=${encodeURIComponent(typeItem.slug)}`;
-                const active = (showAll && typeItem.slug === "basics") || (!showAll && typeItem.slug === requestedType);
-                return (
-                  <Link
-                    key={`course-type-link-${typeItem.id}`}
-                    href={href}
-                    className={`btn ${active ? "btn-primary" : "btn-outline"}`}
-                  >
-                    {typeItem.slug === "basics" ? "Basics (All)" : typeItem.name}
+          <div className="form-actions" style={{ marginTop: "0.75rem", flexWrap: "wrap" }}>
+            {enabledTypes.map((typeItem) => {
+              const href = `/courses?type=${encodeURIComponent(typeItem.slug)}`;
+              const active = (showAll && typeItem.slug === "basics") || (!showAll && typeItem.slug === requestedType);
+              return (
+                <Link
+                  key={`course-type-link-${typeItem.id}`}
+                  href={href}
+                  className={`btn ${active ? "btn-primary" : "btn-outline"}`}
+                >
+                  {typeItem.slug === "basics" ? "Basics (All)" : typeItem.name}
+                </Link>
+              );
+            })}
+          </div>
+
+          <p className="muted" style={{ marginTop: "0.7rem" }}>
+            Showing: <strong>{activeTypeLabel}</strong>
+          </p>
+
+          <div className="card-grid courses-page-grid" style={{ marginTop: "1.1rem" }}>
+            {filteredCourses.length ? (
+              filteredCourses.map((item) => (
+                <article className="post-card" key={item.id}>
+                  <Image src={safeImage(item.coverImage)} alt={item.title} width={1200} height={700} />
+                  <h3>{item.title}</h3>
+                  <p className="meta">
+                    {item.lessons.length} lessons | Pass mark {item.passingScore}%
+                  </p>
+                  <p className="muted">Type: {item.typeSlug === "basics" ? "Basics" : item.typeSlug}</p>
+                  <p className="muted">{item.description}</p>
+                  <Link href={`/courses/${item.slug}`} className="btn btn-primary" style={{ marginTop: "0.8rem" }}>
+                    Start Course
                   </Link>
-                );
-              })}
-            </div>
-
-            <p className="muted" style={{ marginTop: "0.7rem" }}>
-              Showing: <strong>{activeTypeLabel}</strong>
-            </p>
-
-            <div className="card-grid" style={{ marginTop: "1.1rem" }}>
-              {filteredCourses.length ? (
-                filteredCourses.map((item) => (
-                  <article className="post-card" key={item.id}>
-                    <Image src={safeImage(item.coverImage)} alt={item.title} width={1200} height={700} />
-                    <h3>{item.title}</h3>
-                    <p className="meta">
-                      {item.lessons.length} lessons | Pass mark {item.passingScore}%
-                    </p>
-                    <p className="muted">Type: {item.typeSlug === "basics" ? "Basics" : item.typeSlug}</p>
-                    <p className="muted">{item.description}</p>
-                    <Link href={`/courses/${item.slug}`} className="btn btn-primary" style={{ marginTop: "0.8rem" }}>
-                      Start Course
-                    </Link>
-                  </article>
-                ))
-              ) : (
-                <div className="notice">No courses available for this type yet.</div>
-              )}
-            </div>
-          </section>
-        </div>
+                </article>
+              ))
+            ) : (
+              <div className="notice courses-empty">No courses available for this type yet.</div>
+            )}
+          </div>
+        </section>
       </main>
       <Footer />
     </div>

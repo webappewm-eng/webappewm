@@ -486,8 +486,8 @@ export default function AdminPage() {
     liveTrackingEnabled: true,
     themeMode: "light",
     layoutSideGap: 32,
-    heroVideoSliderEnabled: true,
-    heroImageSliderEnabled: true,
+    heroVideoSliderEnabled: false,
+    heroImageSliderEnabled: false,
     logoMode: "text",
     logoImageUrl: "",
     logoSize: 38,
@@ -528,7 +528,7 @@ export default function AdminPage() {
   const [scriptForm, setScriptForm] = useState({ name: "", src: "", inlineCode: "", location: "body" as "head" | "body" });
   const [heroMedia, setHeroMedia] = useState<HeroMediaItem[]>([]);
   const [heroForm, setHeroForm] = useState({
-    section: "video" as HeroMediaItem["section"],
+    section: "image" as HeroMediaItem["section"],
     title: "",
     source: "",
     redirectUrl: "",
@@ -542,8 +542,8 @@ export default function AdminPage() {
   const [appearanceForm, setAppearanceForm] = useState({
     themeMode: "light" as SiteSettings["themeMode"],
     layoutSideGap: "32",
-    heroVideoSliderEnabled: true,
-    heroImageSliderEnabled: true,
+    heroVideoSliderEnabled: false,
+    heroImageSliderEnabled: false,
     logoMode: "text" as SiteSettings["logoMode"],
     logoImageUrl: "",
     logoSize: "38",
@@ -1167,7 +1167,7 @@ export default function AdminPage() {
 
     const preparedRows = heroDraftRows
       .map((row) => ({
-        section: row.section,
+        section: "image",
         title: row.title.trim(),
         source: row.source.trim(),
         redirectUrl: row.redirectUrl.trim()
@@ -1185,12 +1185,12 @@ export default function AdminPage() {
       return;
     }
 
-    const currentMaxOrder = heroMedia.reduce((max, item) => Math.max(max, item.order), 0);
+    const currentMaxOrder = heroMedia.filter((item) => item.section === "image").reduce((max, item) => Math.max(max, item.order), 0);
 
     await Promise.all(
       preparedRows.map((row, index) =>
         createHeroMedia({
-          section: row.section,
+          section: "image",
           title: row.title,
           source: row.source,
           redirectUrl: row.redirectUrl,
@@ -1225,15 +1225,13 @@ export default function AdminPage() {
         .split(/\r?\n/)
         .map((item) => item.trim())
         .filter(Boolean);
-      const currentMaxOrder = heroMedia.reduce((max, item) => Math.max(max, item.order), 0);
+      const currentMaxOrder = heroMedia.filter((item) => item.section === "image").reduce((max, item) => Math.max(max, item.order), 0);
 
       await Promise.all(
         uploads.map(({ file, url }, index) => {
           const nameWithoutExtension = file.name.replace(/\.[^/.]+$/, "").trim();
-          const section: HeroMediaItem["section"] = file.type.startsWith("video/") ? "video" : "image";
-
           return createHeroMedia({
-            section,
+            section: "image",
             title: nameWithoutExtension || `Hero media ${currentMaxOrder + index + 1}`,
             source: url,
             redirectUrl: redirectLinks[index] ?? "",
@@ -1258,7 +1256,7 @@ export default function AdminPage() {
     event.preventDefault();
 
     const payload = {
-      section: heroForm.section,
+      section: "image" as HeroMediaItem["section"],
       title: heroForm.title.trim(),
       source: heroForm.source.trim(),
       redirectUrl: heroForm.redirectUrl.trim(),
@@ -1279,7 +1277,7 @@ export default function AdminPage() {
       setStatus("Hero media created.");
     }
 
-    setHeroForm({ section: "video", title: "", source: "", redirectUrl: "", order: "1", enabled: true });
+    setHeroForm({ section: "image", title: "", source: "", redirectUrl: "", order: "1", enabled: true });
     setHeroEditingId("");
     await refreshAll();
   }
@@ -1292,7 +1290,7 @@ export default function AdminPage() {
     await updateSiteAppearanceSettings({
       themeMode: appearanceForm.themeMode,
       layoutSideGap: nextSideGap,
-      heroVideoSliderEnabled: appearanceForm.heroVideoSliderEnabled,
+      heroVideoSliderEnabled: false,
       heroImageSliderEnabled: appearanceForm.heroImageSliderEnabled,
       logoMode: appearanceForm.logoMode,
       logoImageUrl: appearanceForm.logoImageUrl,
@@ -2244,22 +2242,12 @@ export default function AdminPage() {
               <label>
                 <input
                   type="checkbox"
-                  checked={appearanceForm.heroVideoSliderEnabled}
-                  onChange={(event) =>
-                    setAppearanceForm((prev) => ({ ...prev, heroVideoSliderEnabled: event.target.checked }))
-                  }
-                />
-                Show hero video slider
-              </label>
-              <label>
-                <input
-                  type="checkbox"
                   checked={appearanceForm.heroImageSliderEnabled}
                   onChange={(event) =>
                     setAppearanceForm((prev) => ({ ...prev, heroImageSliderEnabled: event.target.checked }))
                   }
                 />
-                Show hero image slider
+                Enable hero image slider
               </label>
               <select
                 value={appearanceForm.logoMode}
@@ -2387,8 +2375,8 @@ export default function AdminPage() {
           </section>
 
           <section className="admin-section admin-card" hidden={!isTabActive("general")}>
-            <h3>Hero Slider Media (Image and Video)</h3>
-            <p className="muted">Recommended size: images 1600x900 (16:9), videos 1280x720 or 1920x1080 (MP4/WebM).</p>
+            <h3>Hero Slider Media (Image)</h3>
+            <p className="muted">Recommended size: images 1600x900 (16:9).</p>
             <form className="form-grid" onSubmit={handleHeroDraftRowsSubmit}>
               <div className="form-actions">
                 <button className="btn btn-outline" type="button" onClick={addHeroDraftRow}>+ Add Slide</button>
@@ -2397,13 +2385,7 @@ export default function AdminPage() {
                 <div className="notice" key={row.id}>
                   <strong>Slide {index + 1}</strong>
                   <div className="form-grid" style={{ marginTop: "0.55rem" }}>
-                    <select
-                      value={row.section}
-                      onChange={(event) => updateHeroDraftRow(row.id, { section: event.target.value as HeroMediaItem["section"] })}
-                    >
-                      <option value="image">Image slide</option>
-                      <option value="video">Video slide</option>
-                    </select>
+                    <input value="Image slide" disabled />
                     <input
                       placeholder="Slide title"
                       value={row.title}
@@ -2419,7 +2401,7 @@ export default function AdminPage() {
                       value={row.redirectUrl}
                       onChange={(event) => updateHeroDraftRow(row.id, { redirectUrl: event.target.value })}
                     />
-                    <input type="file" accept="image/*,video/*" onChange={(event) => void handleHeroDraftFileUpload(row.id, event)} />
+                    <input type="file" accept="image/*" onChange={(event) => void handleHeroDraftFileUpload(row.id, event)} />
                   </div>
                   <div className="form-actions" style={{ marginTop: "0.6rem" }}>
                     <button className="btn btn-outline" type="button" onClick={() => removeHeroDraftRow(row.id)}>
@@ -2433,23 +2415,8 @@ export default function AdminPage() {
               </div>
             </form>
 
-            <div className="notice" style={{ marginTop: "0.8rem" }}>
-              <strong>Edit Existing Slide</strong>
-              <p className="muted" style={{ marginBottom: 0 }}>
-                Select a slide from the list below and click Edit.
-              </p>
-            </div>
-
             <form className="form-grid" onSubmit={handleHeroMediaSubmit}>
-              <select
-                value={heroForm.section}
-                onChange={(event) =>
-                  setHeroForm((prev) => ({ ...prev, section: event.target.value as HeroMediaItem["section"] }))
-                }
-              >
-                <option value="video">Video slide</option>
-                <option value="image">Image slide</option>
-              </select>
+              <input value="Image slide" disabled />
               <input
                 placeholder="Slide title"
                 value={heroForm.title}
@@ -2467,14 +2434,14 @@ export default function AdminPage() {
                 value={heroForm.redirectUrl}
                 onChange={(event) => setHeroForm((prev) => ({ ...prev, redirectUrl: event.target.value }))}
               />
-              <input type="file" accept="image/*,video/*" onChange={handleHeroMediaFileUpload} />
+              <input type="file" accept="image/*" onChange={handleHeroMediaFileUpload} />
               <textarea
                 rows={3}
                 placeholder="Bulk redirect links (optional, one link per line in upload order)"
                 value={heroBulkRedirectLinks}
                 onChange={(event) => setHeroBulkRedirectLinks(event.target.value)}
               />
-              <input type="file" accept="image/*,video/*" multiple onChange={handleHeroMediaMultiUpload} />
+              <input type="file" accept="image/*" multiple onChange={handleHeroMediaMultiUpload} />
               <input
                 type="number"
                 min={0}
@@ -2500,7 +2467,7 @@ export default function AdminPage() {
                     type="button"
                     onClick={() => {
                       setHeroEditingId("");
-                      setHeroForm({ section: "video", title: "", source: "", redirectUrl: "", order: "1", enabled: true });
+                      setHeroForm({ section: "image", title: "", source: "", redirectUrl: "", order: "1", enabled: true });
                     }}
                   >
                     Cancel Edit
@@ -2510,12 +2477,11 @@ export default function AdminPage() {
             </form>
 
             <div className="table-like">
-              {heroMedia.length ? (
-                heroMedia.map((item) => (
+              {heroMedia.filter((item) => item.section === "image").length ? ( heroMedia.filter((item) => item.section === "image").map((item) => (
                   <div className="notice" key={item.id}>
                     <strong>{item.title}</strong>
                     <p className="muted">
-                      {item.section} | order {item.order} | {item.enabled ? "enabled" : "disabled"}
+                      order {item.order} | {item.enabled ? "enabled" : "disabled"}
                     </p>
                     <p className="muted">{item.source}</p>
                     <p className="muted">Redirect: {item.redirectUrl || "none"}</p>
@@ -2526,7 +2492,7 @@ export default function AdminPage() {
                         onClick={() => {
                           setHeroEditingId(item.id);
                           setHeroForm({
-                            section: item.section,
+                            section: "image",
                             title: item.title,
                             source: item.source,
                             redirectUrl: item.redirectUrl ?? "",

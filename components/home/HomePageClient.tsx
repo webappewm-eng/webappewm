@@ -9,59 +9,8 @@ import { LoginModal } from "@/components/auth/LoginModal";
 import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
 import { NotificationStrip } from "@/components/layout/NotificationStrip";
-import { getCategories, getCourses, getHeroMedia, getPosts, getSiteSettings, getSubtopics, getWebinars } from "@/lib/firebase/data";
-import { Category, Course, HeroMediaItem, Post, Subtopic, Webinar } from "@/lib/types";
-
-const fallbackVideoSlides: HeroMediaItem[] = [
-  {
-    id: "video-1",
-    section: "video",
-    title: "Real circuit walkthrough",
-    source: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4",
-    order: 1,
-    enabled: true,
-    updatedAt: ""
-  },
-  {
-    id: "video-2",
-    section: "video",
-    title: "Hands-on component demo",
-    source: "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.webm",
-    order: 2,
-    enabled: true,
-    updatedAt: ""
-  }
-];
-
-const fallbackImageSlides: HeroMediaItem[] = [
-  {
-    id: "img-1",
-    section: "image",
-    title: "Build from fundamentals",
-    source: "https://images.unsplash.com/photo-1581092160607-ee22621dd758?auto=format&fit=crop&w=1400&q=80",
-    order: 1,
-    enabled: true,
-    updatedAt: ""
-  },
-  {
-    id: "img-2",
-    section: "image",
-    title: "Practical electronics learning",
-    source: "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1400&q=80",
-    order: 2,
-    enabled: true,
-    updatedAt: ""
-  },
-  {
-    id: "img-3",
-    section: "image",
-    title: "From theory to projects",
-    source: "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1400&q=80",
-    order: 3,
-    enabled: true,
-    updatedAt: ""
-  }
-];
+import { getCategories, getHeroMedia, getPosts, getSiteSettings, getSubtopics, getWebinars } from "@/lib/firebase/data";
+import { Category, HeroMediaItem, Post, Subtopic, Webinar } from "@/lib/types";
 
 const learningPaths = [
   {
@@ -122,24 +71,6 @@ const learningPaths = [
 
 const quickTopics = ["Battery", "Ohms Law", "Resistor", "Capacitor", "LED", "Gears", "Arduino", "ESP32"];
 
-const courses = [
-  {
-    title: "Electronics 101",
-    meta: "12 lessons",
-    tag: "Free"
-  },
-  {
-    title: "Arduino Masterclass",
-    meta: "24 lessons",
-    tag: "Free"
-  },
-  {
-    title: "ESP32 and IoT",
-    meta: "18 lessons",
-    tag: "Pro"
-  }
-];
-
 const FALLBACK_POST_IMAGE = "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80";
 
 function getSafeImageSrc(value: string | undefined): string {
@@ -161,12 +92,9 @@ interface HomePageClientProps {
   initialCategories: Category[];
   initialSubtopics: Subtopic[];
   initialPosts: Post[];
-  initialVideoSlides: HeroMediaItem[];
   initialImageSlides: HeroMediaItem[];
   initialWebinars: Webinar[];
-  initialCourses: Course[];
   initialPreviewPercent: number;
-  initialHeroVideoSliderEnabled: boolean;
   initialHeroImageSliderEnabled: boolean;
   requestedCategory?: string;
   requestedSubtopic?: string;
@@ -177,12 +105,9 @@ export default function HomePageClient({
   initialCategories,
   initialSubtopics,
   initialPosts,
-  initialVideoSlides,
   initialImageSlides,
   initialWebinars,
-  initialCourses,
   initialPreviewPercent,
-  initialHeroVideoSliderEnabled,
   initialHeroImageSliderEnabled,
   requestedCategory = "",
   requestedSubtopic = "",
@@ -204,19 +129,13 @@ export default function HomePageClient({
   const [allSubtopics, setAllSubtopics] = useState<Subtopic[]>(initialSubtopics);
   const [posts, setPosts] = useState<Post[]>(initialPosts);
   const [webinars, setWebinars] = useState<Webinar[]>(initialWebinars.filter((item) => item.showOnHome));
-  const [coursesData, setCoursesData] = useState<Course[]>(initialCourses);
 
   const [selectedCategory, setSelectedCategory] = useState<string>(initialSelectedCategory);
   const [selectedSubtopic, setSelectedSubtopic] = useState<string>("");
   const [searchText, setSearchText] = useState(requestedSearch);
-
-  const [videoSlides, setVideoSlides] = useState<HeroMediaItem[]>(initialVideoSlides.length ? initialVideoSlides : fallbackVideoSlides);
-  const [imageSlides, setImageSlides] = useState<HeroMediaItem[]>(initialImageSlides.length ? initialImageSlides : fallbackImageSlides);
+  const [imageSlides, setImageSlides] = useState<HeroMediaItem[]>(initialImageSlides);
   const [previewPercent, setPreviewPercent] = useState(initialPreviewPercent || 20);
-  const [heroVideoSliderEnabled, setHeroVideoSliderEnabled] = useState(initialHeroVideoSliderEnabled);
   const [heroImageSliderEnabled, setHeroImageSliderEnabled] = useState(initialHeroImageSliderEnabled);
-
-  const [videoIndex, setVideoIndex] = useState(0);
   const [imageIndex, setImageIndex] = useState(0);
 
   const [loginOpen, setLoginOpen] = useState(false);
@@ -233,27 +152,22 @@ export default function HomePageClient({
   useEffect(() => {
     async function refreshFromFirebase() {
       try {
-        const [nextCategories, nextSubtopics, nextPosts, nextVideoSlides, nextImageSlides, siteSettings, nextWebinars, nextCourses] = await Promise.all([
+        const [nextCategories, nextSubtopics, nextPosts, nextImageSlides, siteSettings, nextWebinars] = await Promise.all([
           getCategories(),
           getSubtopics(),
           getPosts(),
-          getHeroMedia("video"),
           getHeroMedia("image"),
           getSiteSettings(),
-          getWebinars(false),
-          getCourses(false)
+          getWebinars(false)
         ]);
 
         setCategories(nextCategories);
         setAllSubtopics(nextSubtopics);
         setPosts(nextPosts);
-        setVideoSlides(nextVideoSlides.length ? nextVideoSlides : fallbackVideoSlides);
-        setImageSlides(nextImageSlides.length ? nextImageSlides : fallbackImageSlides);
+        setImageSlides(nextImageSlides);
         setPreviewPercent(siteSettings.contentPreviewPercent);
-        setHeroVideoSliderEnabled(siteSettings.heroVideoSliderEnabled);
         setHeroImageSliderEnabled(siteSettings.heroImageSliderEnabled);
         setWebinars(nextWebinars.filter((item) => item.showOnHome));
-        setCoursesData(nextCourses);
         setLoadError("");
 
         setSelectedCategory((prev) => {
@@ -303,18 +217,37 @@ export default function HomePageClient({
   }, [selectedCategory, selectedSubtopic, subtopics, normalizedRequestedSubtopic]);
 
   useEffect(() => {
-    if (videoSlides.length <= 1 && imageSlides.length <= 1) {
+    if (imageSlides.length <= 1) {
       return;
     }
 
     const timer = window.setInterval(() => {
-      setVideoIndex((prev) => (videoSlides.length ? (prev + 1) % videoSlides.length : 0));
       setImageIndex((prev) => (imageSlides.length ? (prev + 1) % imageSlides.length : 0));
     }, 5000);
 
     return () => window.clearInterval(timer);
-  }, [videoSlides, imageSlides]);
+  }, [imageSlides]);
+  useEffect(() => {
+    const reveals = Array.from(document.querySelectorAll(".reveal"));
+    if (!reveals.length) {
+      return;
+    }
 
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("vis");
+            observer.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.16 }
+    );
+
+    reveals.forEach((item) => observer.observe(item));
+    return () => observer.disconnect();
+  }, []);
   const filteredPosts = useMemo(() => {
     return posts.filter((post) => {
       const matchCategory = selectedCategory ? post.categoryId === selectedCategory : true;
@@ -329,10 +262,8 @@ export default function HomePageClient({
       return matchCategory && matchSubtopic && matchSearch;
     });
   }, [posts, searchText, selectedCategory, selectedSubtopic]);
-
-  const currentVideoSlide = videoSlides[videoIndex] ?? fallbackVideoSlides[0];
-  const currentImageSlide = imageSlides[imageIndex] ?? fallbackImageSlides[0];
-  const activeHeroSlides = Number(heroVideoSliderEnabled) + Number(heroImageSliderEnabled);
+  const currentImageSlide = imageSlides[imageIndex];
+  const showHeroImageSlider = heroImageSliderEnabled && Boolean(currentImageSlide);
 
   return (
     <div className="app-shell">
@@ -342,87 +273,50 @@ export default function HomePageClient({
 
         <section className="hero">
           <div className="hero-inner hero-inner-stacked">
-            {activeHeroSlides ? (
+                        {showHeroImageSlider ? (
               <div className="hero-slider-wrap hero-slider-top hero-slider-full">
-                {heroVideoSliderEnabled ? (
-                  <div className="slider-box">
-                    <div className="slide slide-hero-wide">
-                      {currentVideoSlide ? (
-                        currentVideoSlide.redirectUrl ? (
-                          isExternalHref(currentVideoSlide.redirectUrl) ? (
-                            <a className="slide-media-link" href={currentVideoSlide.redirectUrl} target="_blank" rel="noreferrer">
-                              <video key={currentVideoSlide.id} src={currentVideoSlide.source} autoPlay muted loop playsInline />
-                              <span className="slide-caption">{currentVideoSlide.title}</span>
-                            </a>
-                          ) : (
-                            <Link className="slide-media-link" href={currentVideoSlide.redirectUrl}>
-                              <video key={currentVideoSlide.id} src={currentVideoSlide.source} autoPlay muted loop playsInline />
-                              <span className="slide-caption">{currentVideoSlide.title}</span>
-                            </Link>
-                          )
-                        ) : (
-                          <>
-                            <video key={currentVideoSlide.id} src={currentVideoSlide.source} autoPlay muted loop playsInline />
-                            <span className="slide-caption">{currentVideoSlide.title}</span>
-                          </>
-                        )
+                <div className="slider-box">
+                  <div className="slide slide-hero-wide">
+                    {currentImageSlide?.redirectUrl ? (
+                      isExternalHref(currentImageSlide.redirectUrl) ? (
+                        <a className="slide-media-link" href={currentImageSlide.redirectUrl} target="_blank" rel="noreferrer">
+                          <Image
+                            key={currentImageSlide.id}
+                            src={currentImageSlide.source}
+                            alt={currentImageSlide.title}
+                            width={1600}
+                            height={900}
+                          />
+                          <span className="slide-caption">{currentImageSlide.title}</span>
+                        </a>
                       ) : (
-                        <div className="notice">No video media configured yet.</div>
-                      )}
-                    </div>
+                        <Link className="slide-media-link" href={currentImageSlide.redirectUrl}>
+                          <Image
+                            key={currentImageSlide.id}
+                            src={currentImageSlide.source}
+                            alt={currentImageSlide.title}
+                            width={1600}
+                            height={900}
+                          />
+                          <span className="slide-caption">{currentImageSlide.title}</span>
+                        </Link>
+                      )
+                    ) : currentImageSlide ? (
+                      <>
+                        <Image
+                          key={currentImageSlide.id}
+                          src={currentImageSlide.source}
+                          alt={currentImageSlide.title}
+                          width={1600}
+                          height={900}
+                        />
+                        <span className="slide-caption">{currentImageSlide.title}</span>
+                      </>
+                    ) : null}
                   </div>
-                ) : null}
-
-                {heroImageSliderEnabled ? (
-                  <div className="slider-box">
-                    <div className="slide slide-hero-wide">
-                      {currentImageSlide ? (
-                        currentImageSlide.redirectUrl ? (
-                          isExternalHref(currentImageSlide.redirectUrl) ? (
-                            <a className="slide-media-link" href={currentImageSlide.redirectUrl} target="_blank" rel="noreferrer">
-                              <Image
-                                key={currentImageSlide.id}
-                                src={currentImageSlide.source}
-                                alt={currentImageSlide.title}
-                                width={1600}
-                                height={900}
-                              />
-                              <span className="slide-caption">{currentImageSlide.title}</span>
-                            </a>
-                          ) : (
-                            <Link className="slide-media-link" href={currentImageSlide.redirectUrl}>
-                              <Image
-                                key={currentImageSlide.id}
-                                src={currentImageSlide.source}
-                                alt={currentImageSlide.title}
-                                width={1600}
-                                height={900}
-                              />
-                              <span className="slide-caption">{currentImageSlide.title}</span>
-                            </Link>
-                          )
-                        ) : (
-                          <>
-                            <Image
-                              key={currentImageSlide.id}
-                              src={currentImageSlide.source}
-                              alt={currentImageSlide.title}
-                              width={1600}
-                              height={900}
-                            />
-                            <span className="slide-caption">{currentImageSlide.title}</span>
-                          </>
-                        )
-                      ) : (
-                        <div className="notice">No image media configured yet.</div>
-                      )}
-                    </div>
-                  </div>
-                ) : null}
+                </div>
               </div>
-            ) : (
-              <div className="notice">Hero media sliders are currently disabled in admin settings.</div>
-            )}
+            ) : null}
 
             <div className="hero-main-row">
               <div>
@@ -470,30 +364,36 @@ export default function HomePageClient({
           </div>
         </section>
 
-        <section className="section">
-          <div className="label">How It Works</div>
-          <h2 className="h2">Learn in 3 steps</h2>
-          <div className="steps-grid">
-            <article className="step-card">
-              <h3>1. Read the concept</h3>
-              <p>Plain-English explanations with practical examples.</p>
+        <section className="section section-soft reveal" id="how-it-works">
+          <div className="section-soft-inner">
+            <div className="label">How It Works</div>
+          <h2 className="h2">Learn by <span>doing</span>, not memorising</h2>
+          <p className="body-txt">Every topic takes you from zero to understanding with animations that show, not just tell.</p>
+          <div className="steps">
+            <article className="step d1">
+              <div className="step-num">01</div>
+              <h3>Read the concept</h3>
+              <p>Plain-English explanations with real-world analogies. No jargon and no assumed knowledge.</p>
             </article>
-            <article className="step-card">
-              <h3>2. Watch it animate</h3>
-              <p>Visual previews that explain behavior of components and systems.</p>
+            <article className="step d2">
+              <div className="step-num">02</div>
+              <h3>Watch it animate</h3>
+              <p>See signals and behavior visually so each concept is clear before you move ahead.</p>
             </article>
-            <article className="step-card">
-              <h3>3. Interact and test</h3>
-              <p>Adjust values and see outcomes before trying on hardware.</p>
+            <article className="step d3">
+              <div className="step-num">03</div>
+              <h3>Break it interactively</h3>
+              <p>Change values, test outcomes, and learn by trying instead of memorising theory only.</p>
             </article>
           </div>
+                  </div>
         </section>
 
-        <section className="section section-accent">
+        <section className="section reveal" id="learning-paths">
           <div className="label">Learning Paths</div>
-          <h2 className="h2">Six foundations of every engineer</h2>
-          <p className="body-txt">Start anywhere and progressively build cross-disciplinary understanding.</p>
-          <div className="paths-grid">
+          <h2 className="h2">Six foundations of <span>every engineer</span></h2>
+          <p className="body-txt">Master all six and build cross-disciplinary understanding from day one.</p>
+          <div className="paths">
             {learningPaths.map((path) => (
               <article key={path.id} className={`path-card ${path.colorClass}`}>
                 <div className="path-icon">{path.icon}</div>
@@ -512,13 +412,28 @@ export default function HomePageClient({
           </div>
         </section>
 
-        <section className="section">
-          <div className="label">Live Preview</div>
-          <h2 className="h2">See it in action</h2>
+        <section className="section section-soft reveal" id="live-preview">
+          <div className="section-soft-inner">
+            <div className="label">Live Preview</div>
+          <h2 className="h2">See it <span>in action</span></h2>
           <p className="body-txt">Every topic includes an interactive explanation block like this.</p>
           <AnimationShowcase />
+          </div>
         </section>
 
+        <section className="section reveal" id="browse-topics">
+          <div className="label">Browse Topics</div>
+          <h2 className="h2">Start with anything</h2>
+          <p className="body-txt">Choose a topic and jump directly into community questions and answers.</p>
+          <div className="topics-grid">
+            {quickTopics.map((topic) => (
+              <Link key={topic} className="topic-chip topic-chip-card" href="/community">
+                <span className="name">{topic}</span>
+                <span className="cat">Community</span>
+              </Link>
+            ))}
+          </div>
+        </section>
         <section className="section section-accent" id="categories" hidden>
           <div className="label">Categories</div>
           <h2 className="h2">Pick a Category</h2>
@@ -611,18 +526,6 @@ export default function HomePageClient({
           ) : null}
         </section>
 
-        <section className="section section-accent">
-          <div className="label">Popular Topics</div>
-          <h2 className="h2">Quick Start Chips</h2>
-          <div className="chip-grid">
-            {quickTopics.map((topic) => (
-              <Link key={topic} className="topic-chip" href="/community">
-                {topic}
-              </Link>
-            ))}
-          </div>
-        </section>
-
         <section className="section section-accent" hidden>
           <div className="label">Webinars</div>
           <h2 className="h2">Upcoming live webinars</h2>
@@ -647,33 +550,6 @@ export default function HomePageClient({
                   Open Webinar Page
                 </Link>
               </article>
-            )}
-          </div>
-        </section>
-
-        <section className="section">
-          <div className="label">Certification Courses</div>
-          <h2 className="h2">Go deeper with structured tracks</h2>
-          <div className="course-grid-home">
-            {coursesData.length ? (
-              coursesData.map((course) => (
-                <article className="course-home-card" key={course.id}>
-                  <h3>{course.title}</h3>
-                  <p className="meta">{course.lessons.length} lessons</p>
-                  <p className="muted">{course.description}</p>
-                  <Link href={`/courses/${course.slug}`} className="btn btn-outline" style={{ marginTop: "0.8rem" }}>
-                    Start Course
-                  </Link>
-                </article>
-              ))
-            ) : (
-              courses.map((course) => (
-                <article className="course-home-card" key={course.title}>
-                  <h3>{course.title}</h3>
-                  <p className="meta">{course.meta}</p>
-                  <span className="course-tag">{course.tag}</span>
-                </article>
-              ))
             )}
           </div>
         </section>

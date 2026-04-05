@@ -1,6 +1,6 @@
 import HomePageClient from "@/components/home/HomePageClient";
-import { getCategories, getCourses, getHeroMedia, getPosts, getSiteSettings, getSubtopics, getWebinars } from "@/lib/firebase/data";
-import { Category, Course, HeroMediaItem, Post, Subtopic, Webinar } from "@/lib/types";
+import { getCategories, getHeroMedia, getPosts, getSiteSettings, getSubtopics, getWebinars } from "@/lib/firebase/data";
+import { Category, HeroMediaItem, Post, Subtopic, Webinar } from "@/lib/types";
 
 export const revalidate = 60;
 
@@ -15,23 +15,18 @@ async function loadHomeData(): Promise<{
   categories: Category[];
   subtopics: Subtopic[];
   posts: Post[];
-  videoSlides: HeroMediaItem[];
   imageSlides: HeroMediaItem[];
   webinars: Webinar[];
-  courses: Course[];
   previewPercent: number;
-  heroVideoSliderEnabled: boolean;
   heroImageSliderEnabled: boolean;
 }> {
   try {
-    const [categories, subtopics, posts, videoSlides, imageSlides, webinars, courses, settings] = await Promise.all([
+    const [categories, subtopics, posts, imageSlides, webinars, settings] = await Promise.all([
       getCategories(),
       getSubtopics(),
       getPosts(),
-      getHeroMedia("video"),
       getHeroMedia("image"),
       getWebinars(false),
-      getCourses(false),
       getSiteSettings()
     ]);
 
@@ -39,12 +34,9 @@ async function loadHomeData(): Promise<{
       categories,
       subtopics,
       posts,
-      videoSlides,
       imageSlides,
       webinars,
-      courses,
       previewPercent: settings.contentPreviewPercent,
-      heroVideoSliderEnabled: settings.heroVideoSliderEnabled,
       heroImageSliderEnabled: settings.heroImageSliderEnabled
     };
   } catch {
@@ -52,13 +44,10 @@ async function loadHomeData(): Promise<{
       categories: [],
       subtopics: [],
       posts: [],
-      videoSlides: [],
       imageSlides: [],
       webinars: [],
-      courses: [],
       previewPercent: 20,
-      heroVideoSliderEnabled: true,
-      heroImageSliderEnabled: true
+      heroImageSliderEnabled: false
     };
   }
 }
@@ -76,12 +65,9 @@ export default async function HomePage({
       initialCategories={data.categories}
       initialSubtopics={data.subtopics}
       initialPosts={data.posts}
-      initialVideoSlides={data.videoSlides}
       initialImageSlides={data.imageSlides}
       initialWebinars={data.webinars}
-      initialCourses={data.courses}
       initialPreviewPercent={data.previewPercent}
-      initialHeroVideoSliderEnabled={data.heroVideoSliderEnabled}
       initialHeroImageSliderEnabled={data.heroImageSliderEnabled}
       requestedCategory={firstParam(params.category).trim().toLowerCase()}
       requestedSubtopic={firstParam(params.subtopic).trim().toLowerCase()}

@@ -203,6 +203,23 @@ const emptySocialForm = {
   showInFooter: true,
   showFloating: true
 };
+interface HeroDraftRow {
+  id: string;
+  section: HeroMediaItem["section"];
+  title: string;
+  source: string;
+  redirectUrl: string;
+}
+
+function createHeroDraftRow(section: HeroMediaItem["section"] = "image"): HeroDraftRow {
+  return {
+    id: `hero-row-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+    section,
+    title: "",
+    source: "",
+    redirectUrl: ""
+  };
+}
 
 function slugify(value: string): string {
   return value
@@ -367,6 +384,7 @@ export default function AdminPage() {
     order: "1",
     enabled: true
   });
+  const [heroDraftRows, setHeroDraftRows] = useState<HeroDraftRow[]>([createHeroDraftRow("image")]);
   const [heroBulkRedirectLinks, setHeroBulkRedirectLinks] = useState("");
   const [heroEditingId, setHeroEditingId] = useState("");
 
@@ -918,6 +936,88 @@ export default function AdminPage() {
     }
   }
 
+  function updateHeroDraftRow(rowId: string, patch: Partial<Omit<HeroDraftRow, "id">>) {
+    setHeroDraftRows((prev) =>
+      prev.map((row) => (row.id === rowId ? { ...row, ...patch } : row))
+    );
+  }
+
+  function addHeroDraftRow() {
+    setHeroDraftRows((prev) => [...prev, createHeroDraftRow(prev[prev.length - 1]?.section ?? "image")]);
+  }
+
+  function removeHeroDraftRow(rowId: string) {
+    setHeroDraftRows((prev) => {
+      if (prev.length <= 1) {
+        return [createHeroDraftRow()];
+      }
+      return prev.filter((row) => row.id !== rowId);
+    });
+  }
+
+  async function handleHeroDraftFileUpload(rowId: string, event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    setUploadingImage(true);
+    setUploadStatus("");
+
+    try {
+      const url = await uploadSiteAsset(file);
+      updateHeroDraftRow(rowId, { source: url });
+      setUploadStatus("Hero slide media uploaded.");
+    } catch {
+      setUploadStatus("Hero slide media upload failed.");
+    } finally {
+      setUploadingImage(false);
+      event.target.value = "";
+    }
+  }
+
+  async function handleHeroDraftRowsSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const preparedRows = heroDraftRows
+      .map((row) => ({
+        section: row.section,
+        title: row.title.trim(),
+        source: row.source.trim(),
+        redirectUrl: row.redirectUrl.trim()
+      }))
+      .filter((row) => row.title || row.source || row.redirectUrl);
+
+    if (!preparedRows.length) {
+      setStatus("Add at least one hero slide row first.");
+      return;
+    }
+
+    const invalidRowIndex = preparedRows.findIndex((row) => !row.title || !row.source);
+    if (invalidRowIndex >= 0) {
+      setStatus(`Slide row ${invalidRowIndex + 1} needs title and media URL.`);
+      return;
+    }
+
+    const currentMaxOrder = heroMedia.reduce((max, item) => Math.max(max, item.order), 0);
+
+    await Promise.all(
+      preparedRows.map((row, index) =>
+        createHeroMedia({
+          section: row.section,
+          title: row.title,
+          source: row.source,
+          redirectUrl: row.redirectUrl,
+          order: currentMaxOrder + index + 1,
+          enabled: true
+        })
+      )
+    );
+
+    setHeroDraftRows([createHeroDraftRow("image")]);
+    setStatus(`${preparedRows.length} hero media item(s) created.`);
+    await refreshAll();
+  }
   async function handleHeroMediaMultiUpload(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []);
     if (!files.length) {
@@ -1993,6 +2093,57 @@ export default function AdminPage() {
           <section className="admin-section admin-card" hidden={!isTabActive("general")}>
             <h3>Hero Slider Media (Image and Video)</h3>
             <p className="muted">Recommended size: images 1600x900 (16:9), videos 1280x720 or 1920x1080 (MP4/WebM).</p>
+            <form className="form-grid" onSubmit={handleHeroDraftRowsSubmit}>
+              <div className="form-actions">
+                <button className="btn btn-outline" type="button" onClick={addHeroDraftRow}>+ Add Slide</button>
+              </div>
+              {heroDraftRows.map((row, index) => (
+                <div className="notice" key={row.id}>
+                  <strong>Slide {index + 1}</strong>
+                  <div className="form-grid" style={{ marginTop: "0.55rem" }}>
+                    <select
+                      value={row.section}
+                      onChange={(event) => updateHeroDraftRow(row.id, { section: event.target.value as HeroMediaItem["section"] })}
+                    >
+                      <option value="image">Image slide</option>
+                      <option value="video">Video slide</option>
+                    </select>
+                    <input
+                      placeholder="Slide title"
+                      value={row.title}
+                      onChange={(event) => updateHeroDraftRow(row.id, { title: event.target.value })}
+                    />
+                    <input
+                      placeholder="Media URL"
+                      value={row.source}
+                      onChange={(event) => updateHeroDraftRow(row.id, { source: event.target.value })}
+                    />
+                    <input
+                      placeholder="Redirect link (optional)"
+                      value={row.redirectUrl}
+                      onChange={(event) => updateHeroDraftRow(row.id, { redirectUrl: event.target.value })}
+                    />
+                    <input type="file" accept="image/*,video/*" onChange={(event) => void handleHeroDraftFileUpload(row.id, event)} />
+                  </div>
+                  <div className="form-actions" style={{ marginTop: "0.6rem" }}>
+                    <button className="btn btn-outline" type="button" onClick={() => removeHeroDraftRow(row.id)}>
+                      Remove Row
+                    </button>
+                  </div>
+                </div>
+              ))}
+              <div className="form-actions">
+                <button className="btn btn-primary" type="submit">Create Slides</button>
+              </div>
+            </form>
+
+            <div className="notice" style={{ marginTop: "0.8rem" }}>
+              <strong>Edit Existing Slide</strong>
+              <p className="muted" style={{ marginBottom: 0 }}>
+                Select a slide from the list below and click Edit.
+              </p>
+            </div>
+
             <form className="form-grid" onSubmit={handleHeroMediaSubmit}>
               <select
                 value={heroForm.section}
@@ -3180,6 +3331,10 @@ export default function AdminPage() {
     </div>
   );
 }
+
+
+
+
 
 
 

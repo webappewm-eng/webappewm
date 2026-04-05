@@ -161,6 +161,14 @@ export function Footer() {
     void loadSettings();
   }, []);
 
+  useEffect(() => {
+    if (!status) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => setStatus(""), 5000);
+    return () => window.clearTimeout(timer);
+  }, [status]);
   async function handleSubscribe(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setStatus("");
@@ -194,6 +202,7 @@ export function Footer() {
         </aside>
       ) : null}
 
+      {status ? <div className="status-toast">{status}</div> : null}
       <footer className="footer" id="subscribe">
         <div className="footer-inner">
           <div>
@@ -255,7 +264,7 @@ export function Footer() {
               <button type="submit" className="btn btn-primary">
                 Subscribe
               </button>
-              {status ? <span className="muted">{status}</span> : null}
+              {status ? <div className="notice" style={{ padding: "0.55rem 0.65rem" }}>{status}</div> : null}
             </form>
           </div>
         </div>

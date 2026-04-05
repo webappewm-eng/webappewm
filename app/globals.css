@@ -1374,11 +1374,35 @@ html[data-theme="dark"] .nav-search::placeholder {
 
 .hero-inner-stacked {
   grid-template-columns: 1fr;
-  gap: 1.4rem;
+  gap: 1.25rem;
+}
+
+.hero-main-row {
+  display: grid;
+  grid-template-columns: 1.06fr 0.94fr;
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.hero-circuit-box .slide {
+  min-height: 304px;
+  height: 100%;
+}
+
+.hero-circuit-box .slide-svg {
+  padding: 0.45rem;
 }
 
 .hero-slider-top {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: 1fr;
+}
+
+.hero-slider-top.hero-slider-dual {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.hero-slider-top.hero-slider-single {
+  max-width: 860px;
 }
 
 .visitor-count {
@@ -1391,6 +1415,14 @@ html[data-theme="dark"] .nav-search::placeholder {
   padding: 0.35rem 0.55rem;
   border-radius: 6px;
   background: var(--bg);
+}
+
+.visitor-count-highlight {
+  color: #fff;
+  border-color: #d75a00;
+  background: linear-gradient(120deg, #ff6b00, #f7992b);
+  box-shadow: 0 8px 20px rgba(255, 107, 0, 0.3);
+  font-weight: 700;
 }
 
 .footer-social-row {
@@ -1443,10 +1475,36 @@ html[data-theme="dark"] .nav-search::placeholder {
   z-index: 28;
 }
 
-.community-toolbar {
-  margin-top: 1rem;
+.status-toast {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 90;
+  max-width: min(460px, calc(100vw - 2rem));
+  border: 1px solid rgba(255, 107, 0, 0.4);
+  background: linear-gradient(180deg, rgba(255, 107, 0, 0.2), rgba(255, 107, 0, 0.08));
+  color: var(--text);
+  border-radius: 10px;
+  padding: 0.7rem 0.85rem;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.2);
+}
+
+.community-shell {
   display: grid;
-  grid-template-columns: 220px 1fr auto;
+  gap: 1rem;
+}
+
+.community-header-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+}
+
+.community-toolbar {
+  display: grid;
+  grid-template-columns: 1fr auto;
   gap: 0.65rem;
 }
 
@@ -1458,19 +1516,79 @@ html[data-theme="dark"] .nav-search::placeholder {
   padding: 0.6rem 0.75rem;
 }
 
-.community-form {
-  margin-top: 1rem;
+.community-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) 1fr;
+  gap: 1rem;
+  align-items: start;
+}
+
+.community-sidebar {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-2);
+  padding: 0.7rem;
+  display: grid;
+  gap: 0.5rem;
+  position: sticky;
+  top: calc(var(--nav-h) + 1rem);
+}
+
+.community-category-btn {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.55rem 0.7rem;
+  text-align: left;
+  background: var(--bg);
+  color: var(--text-2);
+  cursor: pointer;
+}
+
+.community-category-btn.active {
+  border-color: var(--orange);
+  color: var(--orange-dim);
+  background: rgba(255, 107, 0, 0.08);
+}
+
+.community-content {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-2);
+  padding: 0.8rem;
 }
 
 .community-list {
-  margin-top: 1.2rem;
+  margin-top: 0.3rem;
   display: grid;
   gap: 0.85rem;
 }
 
-.community-card h3 {
+.community-card-pro {
+  background: var(--bg);
+}
+
+.community-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.7rem;
+}
+
+.community-card-head h3 {
   margin: 0;
   font-family: var(--fd);
+}
+
+.community-category-pill {
+  border: 1px solid var(--orange);
+  border-radius: 999px;
+  padding: 0.25rem 0.55rem;
+  font-size: 0.64rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--orange-dim);
+  background: rgba(255, 107, 0, 0.1);
+  white-space: nowrap;
 }
 
 .community-answers {
@@ -1486,10 +1604,32 @@ html[data-theme="dark"] .nav-search::placeholder {
   padding: 0.6rem;
 }
 
+.community-answer-form {
+  margin-top: 0.6rem;
+}
+
 @media (max-width: 980px) {
+  .hero-main-row,
   .hero-slider-top,
-  .community-toolbar {
+  .community-toolbar,
+  .community-layout,
+  .community-card-head {
     grid-template-columns: 1fr;
+  }
+
+  .community-card-head {
+    display: grid;
+  }
+
+  .community-sidebar {
+    position: static;
+  }
+
+  .status-toast {
+    right: 0.75rem;
+    left: 0.75rem;
+    bottom: 0.75rem;
+    max-width: none;
   }
 
   .social-floating {

@@ -18,8 +18,8 @@ interface HeaderProps {
 const fallbackHeaderLinks: NavigationLink[] = [
   {
     id: "fallback-header-categories",
-    label: "Categories",
-    href: "#categories",
+    label: "Home",
+    href: "/",
     location: "header",
     order: 1,
     parentId: "",
@@ -29,8 +29,8 @@ const fallbackHeaderLinks: NavigationLink[] = [
   },
   {
     id: "fallback-header-topics",
-    label: "Topics",
-    href: "#topics",
+    label: "Courses",
+    href: "/courses",
     location: "header",
     order: 2,
     parentId: "",
@@ -310,7 +310,7 @@ export function Header({ onOpenLogin, searchValue = "", onSearchChange, showSear
       </div>
 
       <div className="nav-links nav-actions">
-        <span className="visitor-count" title="Total visitors recorded">Visitors: {visitorCount}</span>
+        <span className="visitor-count visitor-count-highlight" title="Total visitors recorded">Total Visitors: {visitorCount.toLocaleString()}</span>
         <button className="nav-btn secondary" onClick={toggleTheme} type="button">
           {themeMode === "dark" ? "Light" : "Dark"}
         </button>
@@ -337,7 +337,3 @@ export function Header({ onOpenLogin, searchValue = "", onSearchChange, showSear
     </header>
   );
 }
-
-
-
-

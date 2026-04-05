@@ -584,6 +584,14 @@ export default function AdminPage() {
   }, [profile?.isAdmin, refreshAll]);
 
   useEffect(() => {
+    if (!status) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => setStatus(""), 5000);
+    return () => window.clearTimeout(timer);
+  }, [status]);
+  useEffect(() => {
     if (typeof window === "undefined") {
       return;
     }
@@ -892,6 +900,50 @@ export default function AdminPage() {
     }
   }
 
+  async function handleHeroMediaMultiUpload(event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
+    if (!files.length) {
+      return;
+    }
+
+    setUploadingImage(true);
+    setUploadStatus("");
+
+    try {
+      const uploads = await Promise.all(
+        files.map(async (file) => {
+          const url = await uploadSiteAsset(file);
+          return { file, url };
+        })
+      );
+
+      const currentMaxOrder = heroMedia.reduce((max, item) => Math.max(max, item.order), 0);
+
+      await Promise.all(
+        uploads.map(({ file, url }, index) => {
+          const nameWithoutExtension = file.name.replace(/\.[^/.]+$/, "").trim();
+          const section: HeroMediaItem["section"] = file.type.startsWith("video/") ? "video" : "image";
+
+          return createHeroMedia({
+            section,
+            title: nameWithoutExtension || `Hero media ${currentMaxOrder + index + 1}`,
+            source: url,
+            order: currentMaxOrder + index + 1,
+            enabled: true
+          });
+        })
+      );
+
+      setStatus(`${uploads.length} hero media item(s) created successfully.`);
+      setUploadStatus(`${uploads.length} file(s) uploaded and added to slider.`);
+      await refreshAll();
+    } catch {
+      setUploadStatus("Bulk hero media upload failed.");
+    } finally {
+      setUploadingImage(false);
+      event.target.value = "";
+    }
+  }
   async function handleHeroMediaSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -1350,6 +1402,7 @@ export default function AdminPage() {
           <h1 className="h2">Phase 2 CMS and Analytics</h1>
           <p className="body-txt">Only admins can create or update content. Users can submit only feedback.</p>
           {status ? <div className="notice">{status}</div> : null}
+          {status ? <div className="status-toast">{status}</div> : null}
 
           <div className="tab-row" role="tablist" aria-label="Admin sections">
             {adminTabs.map((tab) => (
@@ -1390,11 +1443,11 @@ export default function AdminPage() {
             </div>
           </section>
 
-          
 
-          
 
-          
+
+
+
           <section className="admin-section admin-card" hidden={!isTabActive("general")}>
             <h3>Visitor Analytics</h3>
             <div className="notice"><strong>Total visitors:</strong> {visitorAnalytics.totalVisitors}</div>
@@ -1803,7 +1856,7 @@ export default function AdminPage() {
                     setAppearanceForm((prev) => ({ ...prev, communityApprovalEnabled: event.target.checked }))
                   }
                 />
-                Community requires approval before publish
+                Require approval for new community questions and answers
               </label>
               <label>
                 <input
@@ -1884,6 +1937,7 @@ export default function AdminPage() {
 
           <section className="admin-section admin-card" hidden={!isTabActive("general")}>
             <h3>Hero Slider Media (Image and Video)</h3>
+            <p className="muted">Recommended size: images 1600x900 (16:9), videos 1280x720 or 1920x1080 (MP4/WebM).</p>
             <form className="form-grid" onSubmit={handleHeroMediaSubmit}>
               <select
                 value={heroForm.section}
@@ -1907,6 +1961,7 @@ export default function AdminPage() {
                 required
               />
               <input type="file" accept="image/*,video/*" onChange={handleHeroMediaFileUpload} />
+              <input type="file" accept="image/*,video/*" multiple onChange={handleHeroMediaMultiUpload} />
               <input
                 type="number"
                 min={0}
@@ -1983,16 +2038,16 @@ export default function AdminPage() {
             </div>
           </section>
 
-          
 
-          
 
-          
-          
 
-          
 
-          
+
+
+
+
+
+
           <section className="admin-section admin-card" hidden={!isTabActive("seo")}>
             <h3>404 Redirect Settings</h3>
             <p className="muted">Configure where users should go from invalid URLs.</p>
@@ -2931,16 +2986,16 @@ export default function AdminPage() {
             </div>
           </section>
 
-          
 
-          
 
-          
-          
 
-          
 
-          
+
+
+
+
+
+
           <section className="admin-section admin-card" hidden={!isTabActive("seo")}>
             <h3>Third-Party Scripts</h3>
             <form className="form-grid" onSubmit={handleScriptSubmit}>
@@ -3039,119 +3094,3 @@ export default function AdminPage() {
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

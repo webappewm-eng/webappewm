@@ -14,6 +14,8 @@ import {
 } from "@/lib/firebase/data";
 import { CommunityAnswer, CommunityCategory, CommunityQuestion, SiteSettings } from "@/lib/types";
 
+const ALL_CATEGORIES = "__all_categories__";
+
 const fallbackSettings: Pick<SiteSettings, "communityApprovalEnabled"> = {
   communityApprovalEnabled: true
 };
@@ -25,20 +27,25 @@ export default function CommunityPageClient() {
   const [categories, setCategories] = useState<CommunityCategory[]>([]);
   const [questions, setQuestions] = useState<CommunityQuestion[]>([]);
   const [answers, setAnswers] = useState<CommunityAnswer[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState("");
+
+  const [selectedCategory, setSelectedCategory] = useState(ALL_CATEGORIES);
   const [searchText, setSearchText] = useState("");
 
+  const [questionModalOpen, setQuestionModalOpen] = useState(false);
   const [questionForm, setQuestionForm] = useState({
     name: "",
+    categoryId: "",
     question: ""
   });
+
   const [answerForms, setAnswerForms] = useState<Record<string, { name: string; answer: string }>>({});
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
 
   async function refreshAll(nextCategoryId?: string, nextSearch?: string) {
-    const categoryId = nextCategoryId ?? selectedCategory;
+    const categorySelection = nextCategoryId ?? selectedCategory;
     const search = nextSearch ?? searchText;
+    const categoryId = categorySelection === ALL_CATEGORIES ? undefined : categorySelection;
 
     const [siteSettings, nextCategories, nextQuestions, nextAnswers] = await Promise.all([
       getSiteSettings(),
@@ -52,9 +59,17 @@ export default function CommunityPageClient() {
     setQuestions(nextQuestions);
     setAnswers(nextAnswers);
 
-    if (!categoryId && nextCategories.length) {
-      setSelectedCategory(nextCategories[0].id);
-    }
+    setQuestionForm((prev) => {
+      if (prev.categoryId) {
+        return prev;
+      }
+
+      if (categorySelection !== ALL_CATEGORIES && nextCategories.some((item) => item.id === categorySelection)) {
+        return { ...prev, categoryId: categorySelection };
+      }
+
+      return { ...prev, categoryId: nextCategories[0]?.id ?? "" };
+    });
   }
 
   useEffect(() => {
@@ -72,8 +87,26 @@ export default function CommunityPageClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    if (!status) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => setStatus(""), 5000);
+    return () => window.clearTimeout(timer);
+  }, [status]);
+
+  const categoryNameById = useMemo(() => {
+    const map: Record<string, string> = {};
+    categories.forEach((item) => {
+      map[item.id] = item.name;
+    });
+    return map;
+  }, [categories]);
+
   const answersByQuestion = useMemo(() => {
     const map: Record<string, CommunityAnswer[]> = {};
+
     answers.forEach((item) => {
       if (!map[item.questionId]) {
         map[item.questionId] = [];
@@ -88,11 +121,21 @@ export default function CommunityPageClient() {
     return map;
   }, [answers]);
 
+  function openAskModal() {
+    setQuestionModalOpen(true);
+    setQuestionForm((prev) => ({
+      ...prev,
+      categoryId:
+        prev.categoryId ||
+        (selectedCategory !== ALL_CATEGORIES ? selectedCategory : categories[0]?.id || "")
+    }));
+  }
+
   async function handleQuestionSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setStatus("");
 
-    const categoryId = selectedCategory || categories[0]?.id || "";
+    const categoryId = questionForm.categoryId || (selectedCategory !== ALL_CATEGORIES ? selectedCategory : categories[0]?.id || "");
     if (!categoryId) {
       setStatus("Please ask admin to create community category first.");
       return;
@@ -104,23 +147,27 @@ export default function CommunityPageClient() {
       return;
     }
 
-    await createCommunityQuestion({
-      categoryId,
-      question,
-      authorName: questionForm.name || user?.displayName || "",
-      authorEmail: user?.email || "",
-      authorUserId: user?.uid || "",
-      requiresApproval: settings.communityApprovalEnabled
-    });
+    try {
+      await createCommunityQuestion({
+        categoryId,
+        question,
+        authorName: questionForm.name || user?.displayName || "",
+        authorEmail: user?.email || "",
+        authorUserId: user?.uid || "",
+        requiresApproval: settings.communityApprovalEnabled
+      });
 
-    setQuestionForm((prev) => ({ ...prev, question: "" }));
-    setStatus(
-      settings.communityApprovalEnabled
-        ? "Question submitted. It will appear after admin approval."
-        : "Question published successfully."
-    );
-
-    await refreshAll(categoryId, searchText);
+      setQuestionForm((prev) => ({ ...prev, question: "", categoryId }));
+      setQuestionModalOpen(false);
+      setStatus(
+        settings.communityApprovalEnabled
+          ? "Question submitted. It will appear after admin approval."
+          : "Question published successfully."
+      );
+      await refreshAll(selectedCategory, searchText);
+    } catch {
+      setStatus("Unable to submit question right now.");
+    }
   }
 
   async function handleAnswerSubmit(event: FormEvent<HTMLFormElement>, question: CommunityQuestion) {
@@ -134,160 +181,221 @@ export default function CommunityPageClient() {
       return;
     }
 
-    await createCommunityAnswer({
-      questionId: question.id,
-      categoryId: question.categoryId,
-      answer,
-      authorName: form.name || user?.displayName || "",
-      authorEmail: user?.email || "",
-      authorUserId: user?.uid || "",
-      requiresApproval: settings.communityApprovalEnabled
-    });
+    try {
+      await createCommunityAnswer({
+        questionId: question.id,
+        categoryId: question.categoryId,
+        answer,
+        authorName: form.name || user?.displayName || "",
+        authorEmail: user?.email || "",
+        authorUserId: user?.uid || "",
+        requiresApproval: settings.communityApprovalEnabled
+      });
 
-    setAnswerForms((prev) => ({
-      ...prev,
-      [question.id]: { ...form, answer: "" }
-    }));
+      setAnswerForms((prev) => ({
+        ...prev,
+        [question.id]: { ...form, answer: "" }
+      }));
 
-    setStatus(
-      settings.communityApprovalEnabled
-        ? "Answer submitted. It will appear after admin approval."
-        : "Answer published successfully."
-    );
-
-    await refreshAll(selectedCategory, searchText);
+      setStatus(
+        settings.communityApprovalEnabled
+          ? "Answer submitted. It will appear after admin approval."
+          : "Answer published successfully."
+      );
+      await refreshAll(selectedCategory, searchText);
+    } catch {
+      setStatus("Unable to submit answer right now.");
+    }
   }
 
   return (
     <div className="app-shell">
       <Header onOpenLogin={() => undefined} showSearch={false} />
       <main className="page-main">
-        <section className="section">
+        <section className="section community-shell">
           <div className="label">Community</div>
-          <h1 className="h2">Ask and answer together</h1>
-          <p className="body-txt">
-            {settings.communityApprovalEnabled
-              ? "Admin approval mode is enabled. New questions and answers will appear after approval."
-              : "Instant mode is enabled. New questions and answers appear immediately."}
-          </p>
+
+          <div className="community-header-row">
+            <div>
+              <h1 className="h2">Ask and answer together</h1>
+              <p className="body-txt">
+                {settings.communityApprovalEnabled
+                  ? "Approval mode is enabled. New questions and answers appear only after admin approval."
+                  : "Instant mode is enabled. New questions and answers appear immediately."}
+              </p>
+            </div>
+
+            <button className="btn btn-primary" type="button" onClick={openAskModal}>
+              Ask Question
+            </button>
+          </div>
 
           {status ? <div className="notice">{status}</div> : null}
+          {status ? <div className="status-toast">{status}</div> : null}
 
           <div className="community-toolbar">
-            <select
-              value={selectedCategory}
-              onChange={(event) => {
-                const next = event.target.value;
-                setSelectedCategory(next);
-                void refreshAll(next, searchText);
-              }}
-            >
-              {categories.length ? null : <option value="">No categories</option>}
-              {categories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
-                </option>
-              ))}
-            </select>
             <input
               type="search"
               placeholder="Search questions or answers"
               value={searchText}
-              onChange={(event) => {
-                const next = event.target.value;
-                setSearchText(next);
-              }}
+              onChange={(event) => setSearchText(event.target.value)}
             />
             <button className="btn btn-outline" type="button" onClick={() => void refreshAll(selectedCategory, searchText)}>
               Search
             </button>
           </div>
 
-          <form className="form-grid community-form" onSubmit={handleQuestionSubmit}>
-            <h3>Ask a question</h3>
-            <input
-              placeholder="Your name (optional)"
-              value={questionForm.name}
-              onChange={(event) => setQuestionForm((prev) => ({ ...prev, name: event.target.value }))}
-            />
-            <textarea
-              rows={3}
-              placeholder="Write your question"
-              value={questionForm.question}
-              onChange={(event) => setQuestionForm((prev) => ({ ...prev, question: event.target.value }))}
-              required
-            />
-            <button className="btn btn-primary" type="submit">
-              Post Question
-            </button>
-          </form>
+          <div className="community-layout">
+            <aside className="community-sidebar">
+              <button
+                className={`community-category-btn ${selectedCategory === ALL_CATEGORIES ? "active" : ""}`}
+                type="button"
+                onClick={() => {
+                  setSelectedCategory(ALL_CATEGORIES);
+                  void refreshAll(ALL_CATEGORIES, searchText);
+                }}
+              >
+                All Categories
+              </button>
 
-          {loading ? <p className="muted">Loading community...</p> : null}
+              {categories.map((category) => (
+                <button
+                  className={`community-category-btn ${selectedCategory === category.id ? "active" : ""}`}
+                  key={category.id}
+                  type="button"
+                  onClick={() => {
+                    setSelectedCategory(category.id);
+                    void refreshAll(category.id, searchText);
+                  }}
+                >
+                  {category.name}
+                </button>
+              ))}
+            </aside>
 
-          <div className="community-list">
-            {questions.length ? (
-              questions.map((question) => {
-                const questionAnswers = answersByQuestion[question.id] ?? [];
-                const answerForm = answerForms[question.id] ?? { name: "", answer: "" };
-                return (
-                  <article className="notice community-card" key={question.id}>
-                    <h3>{question.question}</h3>
-                    <p className="muted">
-                      By {question.authorName || "Guest"} on {new Date(question.createdAt).toLocaleDateString()} {" "}
-                      {question.status !== "approved" ? `| status: ${question.status}` : ""}
-                    </p>
+            <div className="community-content">
+              {loading ? <p className="muted">Loading community...</p> : null}
 
-                    <div className="community-answers">
-                      {questionAnswers.length ? (
-                        questionAnswers.map((answer) => (
-                          <div className="community-answer" key={answer.id}>
-                            <p>{answer.answer}</p>
-                            <p className="muted">
-                              By {answer.authorName || "Guest"} on {new Date(answer.createdAt).toLocaleDateString()} {" "}
-                              {answer.status !== "approved" ? `| status: ${answer.status}` : ""}
-                            </p>
-                          </div>
-                        ))
-                      ) : (
-                        <p className="muted">No answers yet.</p>
-                      )}
-                    </div>
+              <div className="community-list">
+                {questions.length ? (
+                  questions.map((question) => {
+                    const questionAnswers = answersByQuestion[question.id] ?? [];
+                    const answerForm = answerForms[question.id] ?? { name: "", answer: "" };
 
-                    <form className="form-grid" onSubmit={(event) => void handleAnswerSubmit(event, question)}>
-                      <input
-                        placeholder="Your name (optional)"
-                        value={answerForm.name}
-                        onChange={(event) =>
-                          setAnswerForms((prev) => ({
-                            ...prev,
-                            [question.id]: { ...answerForm, name: event.target.value }
-                          }))
-                        }
-                      />
-                      <textarea
-                        rows={2}
-                        placeholder="Write your answer"
-                        value={answerForm.answer}
-                        onChange={(event) =>
-                          setAnswerForms((prev) => ({
-                            ...prev,
-                            [question.id]: { ...answerForm, answer: event.target.value }
-                          }))
-                        }
-                        required
-                      />
-                      <button className="btn btn-outline" type="submit">
-                        Post Answer
-                      </button>
-                    </form>
-                  </article>
-                );
-              })
-            ) : (
-              <p className="muted">No questions found for this category/search yet.</p>
-            )}
+                    return (
+                      <article className="notice community-card-pro" key={question.id}>
+                        <div className="community-card-head">
+                          <h3>{question.question}</h3>
+                          <span className="community-category-pill">
+                            {categoryNameById[question.categoryId] ?? "General"}
+                          </span>
+                        </div>
+
+                        <p className="muted">
+                          By {question.authorName || "Guest"} on {new Date(question.createdAt).toLocaleDateString()} {" "}
+                          {question.status !== "approved" ? `| status: ${question.status}` : ""}
+                        </p>
+
+                        <div className="community-answers">
+                          {questionAnswers.length ? (
+                            questionAnswers.map((answer) => (
+                              <div className="community-answer" key={answer.id}>
+                                <p>{answer.answer}</p>
+                                <p className="muted">
+                                  By {answer.authorName || "Guest"} on {new Date(answer.createdAt).toLocaleDateString()} {" "}
+                                  {answer.status !== "approved" ? `| status: ${answer.status}` : ""}
+                                </p>
+                              </div>
+                            ))
+                          ) : (
+                            <p className="muted">No answers yet.</p>
+                          )}
+                        </div>
+
+                        <form className="form-grid community-answer-form" onSubmit={(event) => void handleAnswerSubmit(event, question)}>
+                          <input
+                            placeholder="Your name (optional)"
+                            value={answerForm.name}
+                            onChange={(event) =>
+                              setAnswerForms((prev) => ({
+                                ...prev,
+                                [question.id]: { ...answerForm, name: event.target.value }
+                              }))
+                            }
+                          />
+                          <textarea
+                            rows={2}
+                            placeholder="Write your answer"
+                            value={answerForm.answer}
+                            onChange={(event) =>
+                              setAnswerForms((prev) => ({
+                                ...prev,
+                                [question.id]: { ...answerForm, answer: event.target.value }
+                              }))
+                            }
+                            required
+                          />
+                          <button className="btn btn-outline" type="submit">
+                            Post Answer
+                          </button>
+                        </form>
+                      </article>
+                    );
+                  })
+                ) : (
+                  <p className="muted">No questions found for this category/search yet.</p>
+                )}
+              </div>
+            </div>
           </div>
         </section>
+
+        {questionModalOpen ? (
+          <div className="modal-backdrop" onClick={() => setQuestionModalOpen(false)}>
+            <div className="modal" onClick={(event) => event.stopPropagation()}>
+              <h3>Ask a question</h3>
+              <p>Pick a category and post your question.</p>
+
+              <form className="form-grid" onSubmit={handleQuestionSubmit}>
+                <input
+                  placeholder="Your name (optional)"
+                  value={questionForm.name}
+                  onChange={(event) => setQuestionForm((prev) => ({ ...prev, name: event.target.value }))}
+                />
+
+                <select
+                  value={questionForm.categoryId}
+                  onChange={(event) => setQuestionForm((prev) => ({ ...prev, categoryId: event.target.value }))}
+                  required
+                >
+                  {categories.length ? null : <option value="">No categories available</option>}
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+
+                <textarea
+                  rows={4}
+                  placeholder="Write your question"
+                  value={questionForm.question}
+                  onChange={(event) => setQuestionForm((prev) => ({ ...prev, question: event.target.value }))}
+                  required
+                />
+
+                <div className="form-actions">
+                  <button className="btn btn-primary" type="submit">
+                    Post Question
+                  </button>
+                  <button className="btn btn-outline" type="button" onClick={() => setQuestionModalOpen(false)}>
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        ) : null}
       </main>
       <Footer />
     </div>

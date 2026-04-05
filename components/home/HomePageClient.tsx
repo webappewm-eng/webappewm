@@ -328,6 +328,7 @@ export default function HomePageClient({
 
   const currentVideoSlide = videoSlides[videoIndex] ?? fallbackVideoSlides[0];
   const currentImageSlide = imageSlides[imageIndex] ?? fallbackImageSlides[0];
+  const activeHeroSlides = Number(heroVideoSliderEnabled) + Number(heroImageSliderEnabled);
 
   return (
     <div className="app-shell">
@@ -337,42 +338,43 @@ export default function HomePageClient({
 
         <section className="hero">
           <div className="hero-inner hero-inner-stacked">
-            <div className="hero-slider-wrap hero-slider-top">
-              {heroVideoSliderEnabled ? (
-                <div className="slider-box">
-                  <p className="slider-label">Video Slider</p>
-                  <div className="slide">
-                    {currentVideoSlide ? (
-                      <video key={currentVideoSlide.id} src={currentVideoSlide.source} autoPlay muted loop playsInline />
-                    ) : (
-                      <div className="notice">No video media configured yet.</div>
-                    )}
-                    {currentVideoSlide ? <span className="slide-caption">{currentVideoSlide.title}</span> : null}
+            <div className="hero-main-row">
+              <div>
+                <div className="hero-tag">Where engineers are made</div>
+                <h1>
+                  Learn <span className="o">Engineering.</span>
+                  <br />
+                  From scratch.
+                </h1>
+                <p className="hero-sub">
+                  Animated explainers, interactive simulations, and free courses across science, electronics,
+                  mechanical, and software foundations.
+                </p>
+                <div className="hero-actions">
+                  <Link className="btn btn-primary" href="/courses">
+                    Start Learning Free
+                  </Link>
+                  <Link className="btn btn-outline" href="/community">
+                    View Community
+                  </Link>
+                </div>
+                <div className="hero-stats">
+                  <div className="stat">
+                    <span className="stat-n">100+</span>
+                    <span className="stat-l">Free Topics</span>
+                  </div>
+                  <div className="stat">
+                    <span className="stat-n">4</span>
+                    <span className="stat-l">Disciplines</span>
+                  </div>
+                  <div className="stat">
+                    <span className="stat-n">0</span>
+                    <span className="stat-l">To Start</span>
                   </div>
                 </div>
-              ) : null}
+              </div>
 
-              {heroImageSliderEnabled ? (
-                <div className="slider-box">
-                  <p className="slider-label">Image Slider</p>
-                  <div className="slide">
-                    {currentImageSlide ? (
-                      <Image
-                        key={currentImageSlide.id}
-                        src={currentImageSlide.source}
-                        alt={currentImageSlide.title}
-                        width={1200}
-                        height={800}
-                      />
-                    ) : (
-                      <div className="notice">No image media configured yet.</div>
-                    )}
-                    {currentImageSlide ? <span className="slide-caption">{currentImageSlide.title}</span> : null}
-                  </div>
-                </div>
-              ) : null}
-
-              <div className="slider-box">
+              <div className="slider-box hero-circuit-box">
                 <p className="slider-label">Circuit Visual</p>
                 <div className="slide slide-svg">
                   <HeroCircuitVisual />
@@ -380,40 +382,45 @@ export default function HomePageClient({
               </div>
             </div>
 
-            <div>
-              <div className="hero-tag">Where engineers are made</div>
-              <h1>
-                Learn <span className="o">Engineering.</span>
-                <br />
-                From scratch.
-              </h1>
-              <p className="hero-sub">
-                Animated explainers, interactive simulations, and free courses across science, electronics,
-                mechanical, and software foundations.
-              </p>
-              <div className="hero-actions">
-                <a className="btn btn-primary" href="#categories">
-                  Start Learning Free
-                </a>
-                <a className="btn btn-outline" href="#topics">
-                  View Topics
-                </a>
+            {activeHeroSlides ? (
+              <div className={`hero-slider-wrap hero-slider-top ${activeHeroSlides > 1 ? "hero-slider-dual" : "hero-slider-single"}`}>
+                {heroVideoSliderEnabled ? (
+                  <div className="slider-box">
+                    <p className="slider-label">Video Slider</p>
+                    <div className="slide">
+                      {currentVideoSlide ? (
+                        <video key={currentVideoSlide.id} src={currentVideoSlide.source} autoPlay muted loop playsInline />
+                      ) : (
+                        <div className="notice">No video media configured yet.</div>
+                      )}
+                      {currentVideoSlide ? <span className="slide-caption">{currentVideoSlide.title}</span> : null}
+                    </div>
+                  </div>
+                ) : null}
+
+                {heroImageSliderEnabled ? (
+                  <div className="slider-box">
+                    <p className="slider-label">Image Slider</p>
+                    <div className="slide">
+                      {currentImageSlide ? (
+                        <Image
+                          key={currentImageSlide.id}
+                          src={currentImageSlide.source}
+                          alt={currentImageSlide.title}
+                          width={1200}
+                          height={800}
+                        />
+                      ) : (
+                        <div className="notice">No image media configured yet.</div>
+                      )}
+                      {currentImageSlide ? <span className="slide-caption">{currentImageSlide.title}</span> : null}
+                    </div>
+                  </div>
+                ) : null}
               </div>
-              <div className="hero-stats">
-                <div className="stat">
-                  <span className="stat-n">100+</span>
-                  <span className="stat-l">Free Topics</span>
-                </div>
-                <div className="stat">
-                  <span className="stat-n">4</span>
-                  <span className="stat-l">Disciplines</span>
-                </div>
-                <div className="stat">
-                  <span className="stat-n">0</span>
-                  <span className="stat-l">To Start</span>
-                </div>
-              </div>
-            </div>
+            ) : (
+              <div className="notice">Hero media sliders are currently disabled in admin settings.</div>
+            )}
           </div>
         </section>
 
@@ -466,7 +473,7 @@ export default function HomePageClient({
           <AnimationShowcase />
         </section>
 
-        <section className="section section-accent" id="categories">
+        <section className="section section-accent" id="categories" hidden>
           <div className="label">Categories</div>
           <h2 className="h2">Pick a Category</h2>
           <p className="body-txt">All categories are loaded from admin-managed data in Firebase.</p>
@@ -508,7 +515,7 @@ export default function HomePageClient({
           ) : null}
         </section>
 
-        <section className="section" id="topics">
+        <section className="section" id="topics" hidden>
           <div className="label">Topics</div>
           <h2 className="h2">Select a Post</h2>
           <p className="body-txt">
@@ -522,7 +529,7 @@ export default function HomePageClient({
               value={searchText}
               onChange={(event) => setSearchText(event.target.value)}
             />
-            <button className="btn btn-outline" type="button" onClick={() => setSearchText("")}> 
+            <button className="btn btn-outline" type="button" onClick={() => setSearchText("")}>
               Clear
             </button>
           </div>
@@ -563,14 +570,14 @@ export default function HomePageClient({
           <h2 className="h2">Quick Start Chips</h2>
           <div className="chip-grid">
             {quickTopics.map((topic) => (
-              <a key={topic} className="topic-chip" href="#topics">
+              <Link key={topic} className="topic-chip" href="/community">
                 {topic}
-              </a>
+              </Link>
             ))}
           </div>
         </section>
 
-        <section className="section section-accent">
+        <section className="section section-accent" hidden>
           <div className="label">Webinars</div>
           <h2 className="h2">Upcoming live webinars</h2>
           <p className="body-txt">Register for live sessions and track registrations from admin panel.</p>
@@ -633,9 +640,9 @@ export default function HomePageClient({
             <h2>Start learning. It is completely free.</h2>
             <p>Pick any topic and start building your engineering knowledge right now.</p>
             <div className="hero-actions" style={{ justifyContent: "center" }}>
-              <a className="btn btn-primary" href="#topics">
+              <Link className="btn btn-primary" href="/community">
                 Start with Basics
-              </a>
+              </Link>
               <Link className="btn btn-outline" href="/courses" style={{ color: "#fff", borderColor: "rgba(255,255,255,0.35)" }}>
                 View Courses
               </Link>
@@ -649,18 +656,3 @@ export default function HomePageClient({
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -1,9 +1,9 @@
-﻿import type { Metadata } from "next";
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
-import { getCourses } from "@/lib/firebase/data";
+import { getCourses, getCourseTypes } from "@/lib/firebase/data";
 
 export const revalidate = 60;
 
@@ -25,8 +25,32 @@ function safeImage(url: string): string {
   return FALLBACK_IMAGE;
 }
 
-export default async function CoursesPage() {
-  const courses = await getCourses(false).catch(() => []);
+interface CoursesPageProps {
+  searchParams?: Promise<{ type?: string }>;
+}
+
+export default async function CoursesPage({ searchParams }: CoursesPageProps) {
+  const params = searchParams ? await searchParams : undefined;
+  const requestedType = (params?.type ?? "basics").toString().trim().toLowerCase();
+
+  const [courses, courseTypes] = await Promise.all([
+    getCourses(false).catch(() => []),
+    getCourseTypes().catch(() => [])
+  ]);
+
+  const enabledTypes = courseTypes.length
+    ? courseTypes
+    : [
+        { id: "fallback-basics", name: "Basics", slug: "basics", order: 1, enabled: true, updatedAt: "" },
+        { id: "fallback-free", name: "Free Learning", slug: "free-learning", order: 2, enabled: true, updatedAt: "" },
+        { id: "fallback-paid", name: "Paid Course", slug: "paid-course", order: 3, enabled: true, updatedAt: "" }
+      ];
+
+  const showAll = !requestedType || requestedType === "basics" || requestedType === "all";
+  const filteredCourses = showAll ? courses : courses.filter((item) => item.typeSlug === requestedType);
+  const activeTypeLabel = showAll
+    ? "Basics (All Courses)"
+    : enabledTypes.find((item) => item.slug === requestedType)?.name ?? requestedType;
 
   return (
     <div className="app-shell">
@@ -42,13 +66,36 @@ export default async function CoursesPage() {
             <h1 className="h2">Courses and Certification Programs</h1>
             <p className="body-txt">Complete lessons, unlock tests, and download certificates.</p>
 
+            <div className="form-actions" style={{ marginTop: "0.75rem", flexWrap: "wrap" }}>
+              {enabledTypes.map((typeItem) => {
+                const href = `/courses?type=${encodeURIComponent(typeItem.slug)}`;
+                const active = (showAll && typeItem.slug === "basics") || (!showAll && typeItem.slug === requestedType);
+                return (
+                  <Link
+                    key={`course-type-link-${typeItem.id}`}
+                    href={href}
+                    className={`btn ${active ? "btn-primary" : "btn-outline"}`}
+                  >
+                    {typeItem.slug === "basics" ? "Basics (All)" : typeItem.name}
+                  </Link>
+                );
+              })}
+            </div>
+
+            <p className="muted" style={{ marginTop: "0.7rem" }}>
+              Showing: <strong>{activeTypeLabel}</strong>
+            </p>
+
             <div className="card-grid" style={{ marginTop: "1.1rem" }}>
-              {courses.length ? (
-                courses.map((item) => (
+              {filteredCourses.length ? (
+                filteredCourses.map((item) => (
                   <article className="post-card" key={item.id}>
                     <Image src={safeImage(item.coverImage)} alt={item.title} width={1200} height={700} />
                     <h3>{item.title}</h3>
-                    <p className="meta">{item.lessons.length} lessons | Pass mark {item.passingScore}%</p>
+                    <p className="meta">
+                      {item.lessons.length} lessons | Pass mark {item.passingScore}%
+                    </p>
+                    <p className="muted">Type: {item.typeSlug === "basics" ? "Basics" : item.typeSlug}</p>
                     <p className="muted">{item.description}</p>
                     <Link href={`/courses/${item.slug}`} className="btn btn-primary" style={{ marginTop: "0.8rem" }}>
                       Start Course
@@ -56,7 +103,7 @@ export default async function CoursesPage() {
                   </article>
                 ))
               ) : (
-                <div className="notice">No courses published yet.</div>
+                <div className="notice">No courses available for this type yet.</div>
               )}
             </div>
           </section>
@@ -66,5 +113,3 @@ export default async function CoursesPage() {
     </div>
   );
 }
-
-

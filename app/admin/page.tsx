@@ -1,5 +1,6 @@
 "use client";
 
+import JSZip from "jszip";
 import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Footer } from "@/components/layout/Footer";
@@ -20,6 +21,8 @@ import {
   createThirdPartyScript,
   createWebinar,
   createCourse,
+  createCourseType,
+  createCourseAd,
   createCertificateTemplate,
   createLandingTopic,
   deleteCategory,
@@ -35,6 +38,8 @@ import {
   deleteThirdPartyScript,
   deleteWebinar,
   deleteCourse,
+  deleteCourseType,
+  deleteCourseAd,
   deleteCertificateTemplate,
   deleteLandingTopic,
   getAnalyticsSummary,
@@ -58,6 +63,8 @@ import {
   getWebinars,
   getWebinarRegistrations,
   getCourses,
+  getCourseTypesForAdmin,
+  getCourseAdsForAdmin,
   getCourseProgressForAdmin,
   getCertificateTemplates,
   getCertificatesForAdmin,
@@ -79,6 +86,8 @@ import {
   updateThirdPartyScript,
   updateWebinar,
   updateCourse,
+  updateCourseType,
+  updateCourseAd,
   updateCertificateTemplate,
   updateLandingTopic
 } from "@/lib/firebase/data";
@@ -104,6 +113,8 @@ import {
   Webinar,
   WebinarRegistration,
   Course,
+  CourseType,
+  CourseAd,
   UserCourseProgress,
   CertificateTemplate,
   LandingTopic,
@@ -162,11 +173,30 @@ const emptyCourseForm = {
   slug: "",
   description: "",
   coverImage: "",
+  typeSlug: "basics",
   templateId: "",
   passingScore: "70",
   lessonsInput: "",
   questionsInput: "",
+  adsEnabled: false,
+  adIds: [] as string[],
   isPublished: true
+};
+
+const emptyCourseTypeForm = {
+  name: "",
+  slug: "",
+  enabled: true
+};
+
+const emptyCourseAdForm = {
+  name: "",
+  type: "image" as CourseAd["type"],
+  title: "",
+  source: "",
+  redirectUrl: "",
+  code: "",
+  enabled: true
 };
 
 const emptyTemplateForm = {
@@ -282,14 +312,133 @@ function questionsToInput(questions: Course["questions"]): string {
     .join("\n");
 }
 
-type AdminTabKey = "general" | "category" | "topics" | "posts" | "seo" | "learning" | "engagement";
+function parseCourseSectionsCsv(raw: string): Course["lessons"] {
+  const lines = raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (!lines.length) {
+    return [];
+  }
+
+  const rows = lines.map((line) =>
+    line
+      .split(",")
+      .map((value) => value.trim().replace(/^"|"$/g, ""))
+  );
+
+  const maybeHeader = rows[0].map((item) => item.toLowerCase());
+  const hasHeader = maybeHeader.includes("title") || maybeHeader.includes("section") || maybeHeader.includes("content");
+  const dataRows = hasHeader ? rows.slice(1) : rows;
+
+  return dataRows
+    .map((row, index) => {
+      const title = (row[0] ?? "").trim() || `Section ${index + 1}`;
+      const content = (row[1] ?? "").trim() || "Add section content";
+      return {
+        id: `lesson-${index + 1}`,
+        title,
+        content,
+        order: index + 1
+      };
+    })
+    .filter((item) => item.title || item.content);
+}
+
+async function parseCourseSectionsSpreadsheet(file: File): Promise<Course["lessons"]> {
+  const fileName = file.name.toLowerCase();
+
+  if (fileName.endsWith(".csv")) {
+    return parseCourseSectionsCsv(await file.text());
+  }
+
+  if (!fileName.endsWith(".xlsx")) {
+    throw new Error("Unsupported format");
+  }
+
+  const zip = await JSZip.loadAsync(file);
+  const sheet = zip.file("xl/worksheets/sheet1.xml");
+  if (!sheet) {
+    return [];
+  }
+
+  const sharedStringsFile = zip.file("xl/sharedStrings.xml");
+  const parser = new DOMParser();
+  const sharedStrings: string[] = [];
+
+  if (sharedStringsFile) {
+    const sharedXml = await sharedStringsFile.async("text");
+    const sharedDoc = parser.parseFromString(sharedXml, "application/xml");
+    Array.from(sharedDoc.getElementsByTagName("si")).forEach((item) => {
+      const parts = Array.from(item.getElementsByTagName("t")).map((node) => node.textContent ?? "");
+      sharedStrings.push(parts.join(""));
+    });
+  }
+
+  const sheetXml = await sheet.async("text");
+  const sheetDoc = parser.parseFromString(sheetXml, "application/xml");
+  const rows = Array.from(sheetDoc.getElementsByTagName("row"));
+  const values: string[][] = rows.map((row) => {
+    const cells = Array.from(row.getElementsByTagName("c"));
+    return cells.map((cell) => {
+      const type = cell.getAttribute("t") ?? "";
+      if (type === "inlineStr") {
+        return cell.getElementsByTagName("t")[0]?.textContent?.trim() ?? "";
+      }
+      const rawValue = cell.getElementsByTagName("v")[0]?.textContent?.trim() ?? "";
+      if (type === "s") {
+        const idx = Number(rawValue);
+        return Number.isFinite(idx) ? sharedStrings[idx] ?? "" : "";
+      }
+      return rawValue;
+    });
+  });
+
+  if (!values.length) {
+    return [];
+  }
+
+  const maybeHeader = values[0].map((item) => item.toLowerCase());
+  const hasHeader = maybeHeader.includes("title") || maybeHeader.includes("section") || maybeHeader.includes("content");
+  const dataRows = hasHeader ? values.slice(1) : values;
+
+  return dataRows
+    .map((row, index) => {
+      const title = (row[0] ?? "").trim() || `Section ${index + 1}`;
+      const content = (row[1] ?? "").trim() || "Add section content";
+      return {
+        id: `lesson-${index + 1}`,
+        title,
+        content,
+        order: index + 1
+      };
+    })
+    .filter((item) => item.title || item.content);
+}
+
+function downloadSampleCourseSectionsFile(): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const csv = "title,content\nSection 1,Intro content\nSection 2,Second section content";
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = "course-sections-sample.csv";
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+type AdminTabKey = "general" | "category" | "topics" | "pages" | "seo" | "learning" | "engagement";
 
 const adminTabs: { key: AdminTabKey; label: string }[] = [
   { key: "general", label: "General" },
   { key: "seo", label: "SEO & Settings" },
   { key: "category", label: "Categories" },
   { key: "topics", label: "Topics" },
-  { key: "posts", label: "Posts & Pages" },
+  { key: "pages", label: "Pages" },
   { key: "learning", label: "Learning" },
   { key: "engagement", label: "Engagement" }
 ];
@@ -317,6 +466,8 @@ export default function AdminPage() {
   const [webinars, setWebinars] = useState<Webinar[]>([]);
   const [webinarRegistrations, setWebinarRegistrations] = useState<WebinarRegistration[]>([]);
   const [coursesData, setCoursesData] = useState<Course[]>([]);
+  const [courseTypesData, setCourseTypesData] = useState<CourseType[]>([]);
+  const [courseAdsData, setCourseAdsData] = useState<CourseAd[]>([]);
   const [courseProgress, setCourseProgress] = useState<UserCourseProgress[]>([]);
   const [certificateTemplates, setCertificateTemplates] = useState<CertificateTemplate[]>([]);
   const [certificates, setCertificates] = useState<UserCertificate[]>([]);
@@ -442,6 +593,11 @@ export default function AdminPage() {
   const [courseForm, setCourseForm] = useState(emptyCourseForm);
   const [courseEditingId, setCourseEditingId] = useState("");
 
+  const [courseTypeForm, setCourseTypeForm] = useState(emptyCourseTypeForm);
+  const [courseTypeEditingId, setCourseTypeEditingId] = useState("");
+  const [courseAdForm, setCourseAdForm] = useState(emptyCourseAdForm);
+  const [courseAdEditingId, setCourseAdEditingId] = useState("");
+
   const [templateForm, setTemplateForm] = useState(emptyTemplateForm);
   const [templateEditingId, setTemplateEditingId] = useState("");
 
@@ -476,6 +632,8 @@ export default function AdminPage() {
       nextWebinars,
       nextWebinarRegistrations,
       nextCourses,
+      nextCourseTypes,
+      nextCourseAds,
       nextCourseProgress,
       nextTemplates,
       nextCertificates,
@@ -502,6 +660,8 @@ export default function AdminPage() {
       getWebinars(true),
       getWebinarRegistrations(),
       getCourses(true),
+      getCourseTypesForAdmin(),
+      getCourseAdsForAdmin(),
       getCourseProgressForAdmin(),
       getCertificateTemplates(),
       getCertificatesForAdmin(),
@@ -529,6 +689,8 @@ export default function AdminPage() {
     setWebinars(nextWebinars);
     setWebinarRegistrations(nextWebinarRegistrations);
     setCoursesData(nextCourses);
+    setCourseTypesData(nextCourseTypes);
+    setCourseAdsData(nextCourseAds);
     setCourseProgress(nextCourseProgress);
     setCertificateTemplates(nextTemplates);
     setCertificates(nextCertificates);
@@ -591,10 +753,18 @@ export default function AdminPage() {
     });
 
     setCourseForm((prev) => {
-      if (prev.templateId || !nextTemplates.length) {
+      const nextTemplateId = prev.templateId || (nextTemplates.find((item) => item.enabled)?.id ?? nextTemplates[0]?.id ?? "");
+      const nextTypeSlug =
+        prev.typeSlug ||
+        nextCourseTypes.find((item) => item.enabled)?.slug ||
+        nextCourseTypes[0]?.slug ||
+        "basics";
+
+      if (nextTemplateId === prev.templateId && nextTypeSlug === prev.typeSlug) {
         return prev;
       }
-      return { ...prev, templateId: nextTemplates.find((item) => item.enabled)?.id ?? nextTemplates[0].id };
+
+      return { ...prev, templateId: nextTemplateId, typeSlug: nextTypeSlug };
     });
   }, []);
   useEffect(() => {
@@ -641,6 +811,22 @@ export default function AdminPage() {
     });
     return map;
   }, [coursesData]);
+
+  const courseTypeNameBySlug = useMemo(() => {
+    const map: Record<string, string> = {};
+    courseTypesData.forEach((item) => {
+      map[item.slug] = item.name;
+    });
+    return map;
+  }, [courseTypesData]);
+
+  const courseAdNameById = useMemo(() => {
+    const map: Record<string, string> = {};
+    courseAdsData.forEach((item) => {
+      map[item.id] = item.name;
+    });
+    return map;
+  }, [courseAdsData]);
 
   const templateNameById = useMemo(() => {
     const map: Record<string, string> = {};
@@ -1413,6 +1599,113 @@ export default function AdminPage() {
     }
   }
 
+  async function handleCourseSectionsImport(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    try {
+      const lessons = await parseCourseSectionsSpreadsheet(file);
+      if (!lessons.length) {
+        setStatus("No sections found in the uploaded file.");
+      } else {
+        setCourseForm((prev) => ({ ...prev, lessonsInput: lessonsToInput(lessons) }));
+        setStatus(`${lessons.length} section(s) imported.`);
+      }
+    } catch {
+      setStatus("Section import failed. Use CSV or XLSX with title/content columns.");
+    } finally {
+      event.target.value = "";
+    }
+  }
+
+  function handleAddSectionLine() {
+    setCourseForm((prev) => ({
+      ...prev,
+      lessonsInput: prev.lessonsInput.trim()
+        ? `${prev.lessonsInput.trim()}\nNew Section::Add section content`
+        : "New Section::Add section content"
+    }));
+  }
+
+  function toggleCourseAdSelection(adId: string) {
+    setCourseForm((prev) => {
+      const exists = prev.adIds.includes(adId);
+      const adIds = exists ? prev.adIds.filter((item) => item !== adId) : [...prev.adIds, adId];
+      return { ...prev, adIds };
+    });
+  }
+
+  async function handleCourseTypeSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const payload = {
+      name: courseTypeForm.name.trim(),
+      slug: slugify(courseTypeForm.slug || courseTypeForm.name),
+      order: courseTypesData.length + 1,
+      enabled: courseTypeForm.enabled
+    };
+
+    if (!payload.name || !payload.slug) {
+      setStatus("Course type name and slug are required.");
+      return;
+    }
+
+    if (courseTypeEditingId) {
+      await updateCourseType(courseTypeEditingId, payload);
+      setStatus("Course type updated.");
+    } else {
+      await createCourseType(payload);
+      setStatus("Course type created.");
+    }
+
+    setCourseTypeEditingId("");
+    setCourseTypeForm(emptyCourseTypeForm);
+    await refreshAll();
+  }
+
+  async function handleCourseAdSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const payload = {
+      name: courseAdForm.name.trim(),
+      type: courseAdForm.type,
+      title: courseAdForm.title.trim(),
+      source: courseAdForm.source.trim(),
+      redirectUrl: courseAdForm.redirectUrl.trim(),
+      code: courseAdForm.code,
+      enabled: courseAdForm.enabled
+    };
+
+    if (!payload.name) {
+      setStatus("Course ad name is required.");
+      return;
+    }
+
+    if (payload.type === "code" && !payload.code.trim()) {
+      setStatus("Code ad requires ad code.");
+      return;
+    }
+
+    if (payload.type !== "code" && !payload.source) {
+      setStatus("Image/Video ad requires source URL.");
+      return;
+    }
+
+    if (courseAdEditingId) {
+      await updateCourseAd(courseAdEditingId, payload);
+      setStatus("Course ad updated.");
+    } else {
+      await createCourseAd(payload);
+      setStatus("Course ad created.");
+    }
+
+    setCourseAdEditingId("");
+    setCourseAdForm(emptyCourseAdForm);
+    await refreshAll();
+  }
+
   async function handleCourseSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -1420,7 +1713,7 @@ export default function AdminPage() {
     const questions = parseQuestionsInput(courseForm.questionsInput);
 
     if (!lessons.length) {
-      setStatus("Add at least one lesson. Format: Lesson title::Lesson content");
+      setStatus("Add at least one section. Format: Section title::Section content");
       return;
     }
 
@@ -1434,10 +1727,13 @@ export default function AdminPage() {
       slug: slugify(courseForm.slug || courseForm.title),
       description: courseForm.description.trim(),
       coverImage: courseForm.coverImage.trim(),
+      typeSlug: slugify(courseForm.typeSlug || "basics") || "basics",
       templateId: courseForm.templateId.trim(),
       lessons,
       passingScore: Math.max(1, Math.min(100, Number(courseForm.passingScore || "70") || 70)),
       questions,
+      adsEnabled: courseForm.adsEnabled,
+      adIds: courseForm.adIds,
       isPublished: courseForm.isPublished
     };
 
@@ -1456,12 +1752,12 @@ export default function AdminPage() {
 
     setCourseForm((prev) => ({
       ...emptyCourseForm,
-      templateId: prev.templateId
+      templateId: prev.templateId,
+      typeSlug: prev.typeSlug
     }));
     setCourseEditingId("");
     await refreshAll();
   }
-
   async function handleTemplateBackgroundUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) {
@@ -2497,7 +2793,7 @@ export default function AdminPage() {
             </div>
           </section>
 
-          <section className="admin-section admin-card" hidden={!isTabActive("posts")}>
+          <section className="admin-section admin-card" hidden={true}>
             <h3>Post Management (SEO included)</h3>
             <div className="notice" style={{ marginBottom: "0.9rem" }}>
               <strong>Gemini AI Assistant</strong>
@@ -2742,12 +3038,211 @@ export default function AdminPage() {
                 <p className="muted">No webinars created yet.</p>
               )}
             </div>
+          </section><section className="admin-section admin-card" hidden={!isTabActive("learning")}>
+            <h3>Course Types</h3>
+            <p className="muted">Default types are Basics, Free Learning, Paid Course. You can add more types anytime.</p>
+            <form className="form-grid" onSubmit={handleCourseTypeSubmit}>
+              <input
+                placeholder="Course type name"
+                value={courseTypeForm.name}
+                onChange={(event) => setCourseTypeForm((prev) => ({ ...prev, name: event.target.value }))}
+                required
+              />
+              <input
+                placeholder="Course type slug"
+                value={courseTypeForm.slug}
+                onChange={(event) => setCourseTypeForm((prev) => ({ ...prev, slug: event.target.value }))}
+                required
+              />
+              <label>
+                <input
+                  type="checkbox"
+                  checked={courseTypeForm.enabled}
+                  onChange={(event) => setCourseTypeForm((prev) => ({ ...prev, enabled: event.target.checked }))}
+                />
+                Enabled
+              </label>
+              <div className="form-actions">
+                <button className="btn btn-primary" type="submit">
+                  {courseTypeEditingId ? "Update Type" : "Add Type"}
+                </button>
+                {courseTypeEditingId ? (
+                  <button
+                    className="btn btn-outline"
+                    type="button"
+                    onClick={() => {
+                      setCourseTypeEditingId("");
+                      setCourseTypeForm(emptyCourseTypeForm);
+                    }}
+                  >
+                    Cancel Edit
+                  </button>
+                ) : null}
+              </div>
+            </form>
+
+            <div className="table-like" style={{ marginTop: "0.8rem" }}>
+              {courseTypesData.length ? (
+                courseTypesData.map((item) => (
+                  <article className="notice" key={`course-type-${item.id}`}>
+                    <strong>{item.name}</strong>
+                    <p className="muted">{item.slug} | {item.enabled ? "enabled" : "disabled"}</p>
+                    <div className="form-actions">
+                      <button
+                        className="btn btn-outline"
+                        type="button"
+                        onClick={() => {
+                          setCourseTypeEditingId(item.id);
+                          setCourseTypeForm({
+                            name: item.name,
+                            slug: item.slug,
+                            enabled: item.enabled
+                          });
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="btn btn-outline"
+                        type="button"
+                        onClick={() => void updateCourseType(item.id, { enabled: !item.enabled }).then(refreshAll)}
+                      >
+                        {item.enabled ? "Disable" : "Enable"}
+                      </button>
+                      <button className="btn btn-outline" type="button" onClick={() => void deleteCourseType(item.id).then(refreshAll)}>
+                        Delete
+                      </button>
+                    </div>
+                  </article>
+                ))
+              ) : (
+                <p className="muted">No course types yet.</p>
+              )}
+            </div>
+          </section>
+
+          <section className="admin-section admin-card" hidden={!isTabActive("learning")}>
+            <h3>Course Ads</h3>
+            <p className="muted">Create ads (image/video/code) and attach them per course.</p>
+            <form className="form-grid" onSubmit={handleCourseAdSubmit}>
+              <input
+                placeholder="Ad name"
+                value={courseAdForm.name}
+                onChange={(event) => setCourseAdForm((prev) => ({ ...prev, name: event.target.value }))}
+                required
+              />
+              <select
+                value={courseAdForm.type}
+                onChange={(event) => setCourseAdForm((prev) => ({ ...prev, type: event.target.value as CourseAd["type"] }))}
+              >
+                <option value="image">Image</option>
+                <option value="video">Video</option>
+                <option value="code">Code</option>
+              </select>
+              <input
+                placeholder="Ad title"
+                value={courseAdForm.title}
+                onChange={(event) => setCourseAdForm((prev) => ({ ...prev, title: event.target.value }))}
+              />
+              {courseAdForm.type === "code" ? (
+                <textarea
+                  rows={5}
+                  placeholder="Ad HTML/JS code"
+                  value={courseAdForm.code}
+                  onChange={(event) => setCourseAdForm((prev) => ({ ...prev, code: event.target.value }))}
+                  required
+                />
+              ) : (
+                <>
+                  <input
+                    placeholder="Ad source URL"
+                    value={courseAdForm.source}
+                    onChange={(event) => setCourseAdForm((prev) => ({ ...prev, source: event.target.value }))}
+                    required
+                  />
+                  <input
+                    placeholder="Redirect URL (optional)"
+                    value={courseAdForm.redirectUrl}
+                    onChange={(event) => setCourseAdForm((prev) => ({ ...prev, redirectUrl: event.target.value }))}
+                  />
+                </>
+              )}
+              <label>
+                <input
+                  type="checkbox"
+                  checked={courseAdForm.enabled}
+                  onChange={(event) => setCourseAdForm((prev) => ({ ...prev, enabled: event.target.checked }))}
+                />
+                Enabled
+              </label>
+              <div className="form-actions">
+                <button className="btn btn-primary" type="submit">
+                  {courseAdEditingId ? "Update Ad" : "Create Ad"}
+                </button>
+                {courseAdEditingId ? (
+                  <button
+                    className="btn btn-outline"
+                    type="button"
+                    onClick={() => {
+                      setCourseAdEditingId("");
+                      setCourseAdForm(emptyCourseAdForm);
+                    }}
+                  >
+                    Cancel Edit
+                  </button>
+                ) : null}
+              </div>
+            </form>
+
+            <div className="table-like" style={{ marginTop: "0.8rem" }}>
+              {courseAdsData.length ? (
+                courseAdsData.map((item) => (
+                  <article className="notice" key={`course-ad-${item.id}`}>
+                    <strong>{item.name}</strong>
+                    <p className="muted">{item.type} | {item.enabled ? "enabled" : "disabled"}</p>
+                    <p className="muted">{item.title || item.source || "Code ad"}</p>
+                    <div className="form-actions">
+                      <button
+                        className="btn btn-outline"
+                        type="button"
+                        onClick={() => {
+                          setCourseAdEditingId(item.id);
+                          setCourseAdForm({
+                            name: item.name,
+                            type: item.type,
+                            title: item.title,
+                            source: item.source,
+                            redirectUrl: item.redirectUrl,
+                            code: item.code,
+                            enabled: item.enabled
+                          });
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="btn btn-outline"
+                        type="button"
+                        onClick={() => void updateCourseAd(item.id, { enabled: !item.enabled }).then(refreshAll)}
+                      >
+                        {item.enabled ? "Disable" : "Enable"}
+                      </button>
+                      <button className="btn btn-outline" type="button" onClick={() => void deleteCourseAd(item.id).then(refreshAll)}>
+                        Delete
+                      </button>
+                    </div>
+                  </article>
+                ))
+              ) : (
+                <p className="muted">No course ads created yet.</p>
+              )}
+            </div>
           </section>
 
           <section className="admin-section admin-card" hidden={!isTabActive("learning")}>
             <h3>Course and Certification Management</h3>
             <p className="muted">
-              Lessons format: <code>Lesson title::Lesson content</code> per line. Questions format:
+              Section format: <code>Section title::Section content</code> per line. Questions format:
               <code>Question||Option A|Option B|Option C||0</code> per line.
             </p>
             <form className="form-grid" onSubmit={handleCourseSubmit}>
@@ -2763,6 +3258,18 @@ export default function AdminPage() {
                 onChange={(event) => setCourseForm((prev) => ({ ...prev, slug: event.target.value }))}
                 required
               />
+              <select
+                value={courseForm.typeSlug}
+                onChange={(event) => setCourseForm((prev) => ({ ...prev, typeSlug: event.target.value }))}
+              >
+                {(courseTypesData.length ? courseTypesData : [{ id: "fallback-basics", name: "Basics", slug: "basics", enabled: true, order: 1, updatedAt: "" }])
+                  .filter((item) => item.enabled)
+                  .map((item) => (
+                    <option key={`course-type-option-${item.id}`} value={item.slug}>
+                      {item.name}
+                    </option>
+                  ))}
+              </select>
               <textarea
                 rows={2}
                 placeholder="Course description"
@@ -2795,9 +3302,15 @@ export default function AdminPage() {
                 value={courseForm.passingScore}
                 onChange={(event) => setCourseForm((prev) => ({ ...prev, passingScore: event.target.value }))}
               />
+
+              <div className="form-actions">
+                <button className="btn btn-outline" type="button" onClick={handleAddSectionLine}>+ Add Section</button>
+                <button className="btn btn-outline" type="button" onClick={downloadSampleCourseSectionsFile}>Download Section Sample</button>
+              </div>
+              <input type="file" accept=".csv,.xlsx" onChange={handleCourseSectionsImport} />
               <textarea
-                rows={5}
-                placeholder="Lesson 1 title::Lesson 1 content"
+                rows={6}
+                placeholder="Section 1 title::Section 1 content"
                 value={courseForm.lessonsInput}
                 onChange={(event) => setCourseForm((prev) => ({ ...prev, lessonsInput: event.target.value }))}
                 required
@@ -2809,6 +3322,38 @@ export default function AdminPage() {
                 onChange={(event) => setCourseForm((prev) => ({ ...prev, questionsInput: event.target.value }))}
                 required
               />
+
+              <label>
+                <input
+                  type="checkbox"
+                  checked={courseForm.adsEnabled}
+                  onChange={(event) => setCourseForm((prev) => ({ ...prev, adsEnabled: event.target.checked }))}
+                />
+                Enable ads on this course page
+              </label>
+
+              {courseForm.adsEnabled ? (
+                <div className="notice">
+                  <strong>Select ads for this course</strong>
+                  <div className="table-like" style={{ marginTop: "0.65rem" }}>
+                    {courseAdsData.length ? (
+                      courseAdsData.map((item) => (
+                        <label key={`course-ad-select-${item.id}`} style={{ display: "flex", gap: "0.45rem", alignItems: "center" }}>
+                          <input
+                            type="checkbox"
+                            checked={courseForm.adIds.includes(item.id)}
+                            onChange={() => toggleCourseAdSelection(item.id)}
+                          />
+                          {item.name} ({item.type})
+                        </label>
+                      ))
+                    ) : (
+                      <p className="muted">No ads available. Create ads first.</p>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+
               <label>
                 <input
                   type="checkbox"
@@ -2829,7 +3374,8 @@ export default function AdminPage() {
                       setCourseEditingId("");
                       setCourseForm((prev) => ({
                         ...emptyCourseForm,
-                        templateId: prev.templateId
+                        templateId: prev.templateId,
+                        typeSlug: prev.typeSlug
                       }));
                     }}
                   >
@@ -2845,9 +3391,10 @@ export default function AdminPage() {
                   <article className="notice" key={`admin-course-${item.id}`}>
                     <strong>{item.title}</strong>
                     <p className="muted">
-                      /courses/{item.slug} | lessons {item.lessons.length} | questions {item.questions.length} | pass {item.passingScore}%
+                      /courses/{item.slug} | type {courseTypeNameBySlug[item.typeSlug] ?? item.typeSlug} | sections {item.lessons.length} | questions {item.questions.length} | pass {item.passingScore}%
                     </p>
                     <p className="muted">Template: {templateNameById[item.templateId ?? ""] ?? "none"}</p>
+                    <p className="muted">Ads: {item.adsEnabled ? item.adIds.map((id) => courseAdNameById[id] ?? id).join(", ") || "enabled" : "disabled"}</p>
                     <div className="form-actions">
                       <button
                         className="btn btn-outline"
@@ -2859,10 +3406,13 @@ export default function AdminPage() {
                             slug: item.slug,
                             description: item.description,
                             coverImage: item.coverImage,
+                            typeSlug: item.typeSlug || "basics",
                             templateId: item.templateId ?? "",
                             passingScore: String(item.passingScore),
                             lessonsInput: lessonsToInput(item.lessons),
                             questionsInput: questionsToInput(item.questions),
+                            adsEnabled: item.adsEnabled === true,
+                            adIds: item.adIds ?? [],
                             isPublished: item.isPublished
                           });
                         }}
@@ -3016,8 +3566,8 @@ export default function AdminPage() {
           </section>
 
           <section className="admin-section admin-card" hidden={!isTabActive("general")}>
-            <h3>Category-wise and Post-wise Links</h3>
-            <p className="muted">Use these links for sharing category pages and individual posts.</p>
+            <h3>Category Links</h3>
+            <p className="muted">Use these links for sharing category pages.</p>
             <div className="table-like">
               <div className="notice">
                 <strong>Category links</strong>
@@ -3035,26 +3585,10 @@ export default function AdminPage() {
                   <p className="muted">No categories available.</p>
                 )}
               </div>
-              <div className="notice">
-                <strong>Post links</strong>
-                {posts.length ? (
-                  posts.map((item) => {
-                    const path = `/post/${item.slug}`;
-                    const href = `${siteOrigin}${path}`;
-                    return (
-                      <p className="muted" key={`post-link-${item.id}`}>
-                        <a className="nav-link" href={href} target="_blank" rel="noreferrer">{href}</a>
-                      </p>
-                    );
-                  })
-                ) : (
-                  <p className="muted">No posts available.</p>
-                )}
-              </div>
             </div>
           </section>
 
-          <section className="admin-section admin-card" hidden={!isTabActive("posts")}>
+          <section className="admin-section admin-card" hidden={!isTabActive("pages")}>
             <h3>Custom Page Management</h3>
             <form className="form-grid" onSubmit={handlePageSubmit}>
               <input placeholder="Page title" value={pageForm.title} onChange={(event) => setPageForm((prev) => ({ ...prev, title: event.target.value }))} required />
@@ -3331,6 +3865,21 @@ export default function AdminPage() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

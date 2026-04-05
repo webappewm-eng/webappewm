@@ -199,16 +199,42 @@ export interface CourseQuestion {
   correctOptionIndex: number;
 }
 
+export interface CourseType {
+  id: string;
+  name: string;
+  slug: string;
+  order: number;
+  enabled: boolean;
+  updatedAt: string;
+}
+
+export type CourseAdType = "image" | "video" | "code";
+
+export interface CourseAd {
+  id: string;
+  name: string;
+  type: CourseAdType;
+  title: string;
+  source: string;
+  redirectUrl: string;
+  code: string;
+  enabled: boolean;
+  updatedAt: string;
+}
+
 export interface Course {
   id: string;
   title: string;
   slug: string;
   description: string;
   coverImage: string;
+  typeSlug: string;
   templateId?: string;
   lessons: CourseLesson[];
   passingScore: number;
   questions: CourseQuestion[];
+  adsEnabled: boolean;
+  adIds: string[];
   isPublished: boolean;
   updatedAt: string;
 }
@@ -340,6 +366,9 @@ export interface LandingTopic {
   isPublished: boolean;
   updatedAt: string;
 }
+
+
+
 
 
 

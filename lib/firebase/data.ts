@@ -25,6 +25,8 @@ import {
   mockHeroMedia,
   mockWebinars,
   mockCourses,
+  mockCourseTypes,
+  mockCourseAds,
   mockCertificateTemplates,
   mockCommunityCategories,
   mockLandingTopics,
@@ -56,6 +58,8 @@ import {
   Webinar,
   WebinarRegistration,
   Course,
+  CourseAd,
+  CourseType,
   UserCourseProgress,
   CertificateTemplate,
   LandingTopic,
@@ -79,6 +83,8 @@ const localStore = {
   webinars: [...mockWebinars],
   webinarRegistrations: [] as WebinarRegistration[],
   courses: [...mockCourses],
+  courseTypes: [...mockCourseTypes] as CourseType[],
+  courseAds: [...mockCourseAds] as CourseAd[],
   courseProgress: [] as UserCourseProgress[],
   certificateTemplates: [...mockCertificateTemplates],
   certificates: [] as UserCertificate[],
@@ -1349,6 +1355,48 @@ function mapWebinarDoc(data: Record<string, unknown>, id: string): Webinar {
   };
 }
 
+function normalizeCourseTypeSlug(value: unknown): string {
+  const normalized = sanitizeString(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-");
+  return normalized || "basics";
+}
+
+function normalizeCourseAdType(value: unknown): CourseAd["type"] {
+  const normalized = sanitizeString(value).toLowerCase();
+  if (normalized === "video" || normalized === "code") {
+    return normalized;
+  }
+  return "image";
+}
+
+function mapCourseTypeDoc(data: Record<string, unknown>, id: string): CourseType {
+  return {
+    id,
+    name: sanitizeString(data.name) || "Course Type",
+    slug: normalizeCourseTypeSlug(data.slug ?? data.name),
+    order: Number(data.order ?? 0),
+    enabled: data.enabled !== false,
+    updatedAt: normalizeDate(data.updatedAt)
+  };
+}
+
+function mapCourseAdDoc(data: Record<string, unknown>, id: string): CourseAd {
+  return {
+    id,
+    name: sanitizeString(data.name) || "Course Ad",
+    type: normalizeCourseAdType(data.type),
+    title: sanitizeString(data.title),
+    source: sanitizeString(data.source),
+    redirectUrl: normalizeOptionalLink(data.redirectUrl),
+    code: String(data.code ?? ""),
+    enabled: data.enabled !== false,
+    updatedAt: normalizeDate(data.updatedAt)
+  };
+}
+
 function mapCourseDoc(data: Record<string, unknown>, id: string): Course {
   return {
     id,
@@ -1356,10 +1404,15 @@ function mapCourseDoc(data: Record<string, unknown>, id: string): Course {
     slug: sanitizeString(data.slug),
     description: sanitizeString(data.description),
     coverImage: sanitizeString(data.coverImage),
+    typeSlug: normalizeCourseTypeSlug(data.typeSlug),
     templateId: sanitizeString(data.templateId),
     lessons: Array.isArray(data.lessons) ? (data.lessons as Course["lessons"]) : [],
     passingScore: Number(data.passingScore ?? 70),
     questions: Array.isArray(data.questions) ? (data.questions as Course["questions"]) : [],
+    adsEnabled: data.adsEnabled === true,
+    adIds: Array.isArray(data.adIds)
+      ? (data.adIds as unknown[]).map((item) => sanitizeString(item)).filter(Boolean)
+      : [],
     isPublished: Boolean(data.isPublished),
     updatedAt: normalizeDate(data.updatedAt)
   };
@@ -1572,6 +1625,266 @@ export async function getWebinarRegistrations(webinarId?: string): Promise<Webin
   );
 }
 
+function normalizeCourseAdIds(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const seen = new Set<string>();
+  const ids: string[] = [];
+  (value as unknown[]).forEach((item) => {
+    const id = sanitizeString(item);
+    if (!id || seen.has(id)) {
+      return;
+    }
+    seen.add(id);
+    ids.push(id);
+  });
+  return ids;
+}
+
+function normalizeCourseInput(input: Partial<Omit<Course, "id" | "updatedAt">>): Partial<Omit<Course, "id" | "updatedAt">> {
+  const patch: Partial<Omit<Course, "id" | "updatedAt">> = {
+    ...input,
+    ...(typeof input.title === "string" ? { title: sanitizeString(input.title) } : {}),
+    ...(typeof input.slug === "string" ? { slug: sanitizeString(input.slug).toLowerCase() } : {}),
+    ...(typeof input.description === "string" ? { description: sanitizeString(input.description) } : {}),
+    ...(typeof input.coverImage === "string" ? { coverImage: sanitizeString(input.coverImage) } : {}),
+    ...(typeof input.templateId === "string" ? { templateId: sanitizeString(input.templateId) } : {}),
+    ...(input.typeSlug !== undefined ? { typeSlug: normalizeCourseTypeSlug(input.typeSlug) } : {}),
+    ...(input.adsEnabled !== undefined ? { adsEnabled: input.adsEnabled === true } : {}),
+    ...(input.adIds !== undefined ? { adIds: normalizeCourseAdIds(input.adIds) } : {})
+  };
+
+  if (Array.isArray(input.lessons)) {
+    patch.lessons = (input.lessons as Course["lessons"]).map((lesson, index) => ({
+      id: sanitizeString(lesson.id) || `lesson-${index + 1}`,
+      title: sanitizeString(lesson.title) || `Lesson ${index + 1}`,
+      content: String(lesson.content ?? ""),
+      order: Number(lesson.order ?? index + 1)
+    }));
+  }
+
+  if (Array.isArray(input.questions)) {
+    patch.questions = (input.questions as Course["questions"]).map((question) => {
+      const options = Array.isArray(question.options)
+        ? question.options.map((option) => sanitizeString(option)).filter(Boolean)
+        : [];
+
+      return {
+        question: sanitizeString(question.question) || "Question",
+        options: options.length ? options : ["Option A", "Option B"],
+        correctOptionIndex: Math.max(
+          0,
+          Math.min(options.length > 0 ? options.length - 1 : 1, Number(question.correctOptionIndex ?? 0) || 0)
+        )
+      };
+    });
+  }
+
+  if (input.passingScore !== undefined) {
+    patch.passingScore = Math.max(1, Math.min(100, Number(input.passingScore ?? 70) || 70));
+  }
+
+  return patch;
+}
+
+async function ensureDefaultCourseTypes(): Promise<void> {
+  if (!hasFirebaseConfig || !db) {
+    return;
+  }
+
+  const firestore = db;
+  const collectionRef = collection(firestore, "course_types");
+  const snap = await getDocs(collectionRef);
+  if (!snap.empty) {
+    return;
+  }
+
+  await Promise.all(
+    mockCourseTypes.map((item) =>
+      setDoc(doc(firestore, "course_types", item.id), {
+        name: sanitizeString(item.name),
+        slug: normalizeCourseTypeSlug(item.slug || item.name),
+        order: Number(item.order ?? 0),
+        enabled: item.enabled !== false,
+        updatedAt: serverTimestamp()
+      })
+    )
+  );
+}
+export async function getCourseTypes(): Promise<CourseType[]> {
+  const filterRows = (rows: CourseType[]) => {
+    const enabled = rows.filter((item) => item.enabled);
+    return sortByOrder(enabled);
+  };
+
+  if (!hasFirebaseConfig || !db) {
+    return filterRows(localStore.courseTypes);
+  }
+
+  await ensureDefaultCourseTypes();
+  const snap = await getDocs(collection(db, "course_types"));
+  if (snap.empty) {
+    return filterRows(mockCourseTypes);
+  }
+
+  return filterRows(snap.docs.map((item) => mapCourseTypeDoc(item.data() as Record<string, unknown>, item.id)));
+}
+
+export async function getCourseTypesForAdmin(): Promise<CourseType[]> {
+  if (!hasFirebaseConfig || !db) {
+    return sortByOrder(localStore.courseTypes);
+  }
+
+  await ensureDefaultCourseTypes();
+  const snap = await getDocs(collection(db, "course_types"));
+  if (snap.empty) {
+    return sortByOrder(mockCourseTypes);
+  }
+
+  return sortByOrder(snap.docs.map((item) => mapCourseTypeDoc(item.data() as Record<string, unknown>, item.id)));
+}
+
+export async function createCourseType(input: Omit<CourseType, "id" | "updatedAt">): Promise<void> {
+  const payload = {
+    name: sanitizeString(input.name) || "Course Type",
+    slug: normalizeCourseTypeSlug(input.slug || input.name),
+    order: Number(input.order ?? 0),
+    enabled: input.enabled !== false
+  };
+
+  if (!hasFirebaseConfig || !db) {
+    localStore.courseTypes.push({ id: `course-type-${Date.now()}`, ...payload, updatedAt: new Date().toISOString() });
+    return;
+  }
+
+  await addDoc(collection(db, "course_types"), {
+    ...payload,
+    updatedAt: serverTimestamp()
+  });
+}
+
+export async function updateCourseType(
+  id: string,
+  input: Partial<Omit<CourseType, "id" | "updatedAt">>
+): Promise<void> {
+  const patch = {
+    ...input,
+    ...(typeof input.name === "string" ? { name: sanitizeString(input.name) } : {}),
+    ...(typeof input.slug === "string" ? { slug: normalizeCourseTypeSlug(input.slug) } : {}),
+    ...(input.order !== undefined ? { order: Number(input.order ?? 0) } : {})
+  };
+
+  if (!hasFirebaseConfig || !db) {
+    localStore.courseTypes = localStore.courseTypes.map((item) =>
+      item.id === id ? { ...item, ...patch, updatedAt: new Date().toISOString() } : item
+    );
+    return;
+  }
+
+  await updateDoc(doc(db, "course_types", id), {
+    ...patch,
+    updatedAt: serverTimestamp()
+  });
+}
+
+export async function deleteCourseType(id: string): Promise<void> {
+  if (!hasFirebaseConfig || !db) {
+    const deleting = localStore.courseTypes.find((item) => item.id === id);
+    localStore.courseTypes = localStore.courseTypes.filter((item) => item.id !== id);
+    if (deleting?.slug) {
+      localStore.courses = localStore.courses.map((course) =>
+        course.typeSlug === deleting.slug ? { ...course, typeSlug: "basics", updatedAt: new Date().toISOString() } : course
+      );
+    }
+    return;
+  }
+
+  await deleteDoc(doc(db, "course_types", id));
+}
+
+export async function getCourseAds(): Promise<CourseAd[]> {
+  const filterRows = (rows: CourseAd[]) => sortByDateDesc(rows.filter((item) => item.enabled));
+
+  if (!hasFirebaseConfig || !db) {
+    return filterRows(localStore.courseAds);
+  }
+
+  const snap = await getDocs(collection(db, "course_ads"));
+  return filterRows(snap.docs.map((item) => mapCourseAdDoc(item.data() as Record<string, unknown>, item.id)));
+}
+
+export async function getCourseAdsForAdmin(): Promise<CourseAd[]> {
+  if (!hasFirebaseConfig || !db) {
+    return sortByDateDesc(localStore.courseAds);
+  }
+
+  const snap = await getDocs(collection(db, "course_ads"));
+  return sortByDateDesc(snap.docs.map((item) => mapCourseAdDoc(item.data() as Record<string, unknown>, item.id)));
+}
+
+export async function createCourseAd(input: Omit<CourseAd, "id" | "updatedAt">): Promise<void> {
+  const payload = {
+    name: sanitizeString(input.name) || "Course Ad",
+    type: normalizeCourseAdType(input.type),
+    title: sanitizeString(input.title),
+    source: sanitizeString(input.source),
+    redirectUrl: normalizeOptionalLink(input.redirectUrl),
+    code: String(input.code ?? ""),
+    enabled: input.enabled !== false
+  };
+
+  if (!hasFirebaseConfig || !db) {
+    localStore.courseAds.unshift({ id: `course-ad-${Date.now()}`, ...payload, updatedAt: new Date().toISOString() });
+    return;
+  }
+
+  await addDoc(collection(db, "course_ads"), {
+    ...payload,
+    updatedAt: serverTimestamp()
+  });
+}
+
+export async function updateCourseAd(
+  id: string,
+  input: Partial<Omit<CourseAd, "id" | "updatedAt">>
+): Promise<void> {
+  const patch = {
+    ...input,
+    ...(typeof input.name === "string" ? { name: sanitizeString(input.name) } : {}),
+    ...(input.type !== undefined ? { type: normalizeCourseAdType(input.type) } : {}),
+    ...(typeof input.title === "string" ? { title: sanitizeString(input.title) } : {}),
+    ...(typeof input.source === "string" ? { source: sanitizeString(input.source) } : {}),
+    ...(typeof input.redirectUrl === "string" ? { redirectUrl: normalizeOptionalLink(input.redirectUrl) } : {}),
+    ...(input.code !== undefined ? { code: String(input.code ?? "") } : {})
+  };
+
+  if (!hasFirebaseConfig || !db) {
+    localStore.courseAds = localStore.courseAds.map((item) =>
+      item.id === id ? { ...item, ...patch, updatedAt: new Date().toISOString() } : item
+    );
+    return;
+  }
+
+  await updateDoc(doc(db, "course_ads", id), {
+    ...patch,
+    updatedAt: serverTimestamp()
+  });
+}
+
+export async function deleteCourseAd(id: string): Promise<void> {
+  if (!hasFirebaseConfig || !db) {
+    localStore.courseAds = localStore.courseAds.filter((item) => item.id !== id);
+    localStore.courses = localStore.courses.map((item) => ({
+      ...item,
+      adIds: item.adIds.filter((adId) => adId !== id)
+    }));
+    return;
+  }
+
+  await deleteDoc(doc(db, "course_ads", id));
+}
+
 export async function getCourses(includeDrafts = false): Promise<Course[]> {
   const filterRows = (rows: Course[]) => {
     const filtered = includeDrafts ? rows : rows.filter((item) => item.isPublished);
@@ -1594,8 +1907,20 @@ export async function getCourseBySlug(slug: string): Promise<Course | null> {
 }
 
 export async function createCourse(input: Omit<Course, "id" | "updatedAt">): Promise<void> {
-  const payload = {
-    ...input,
+  const normalized = normalizeCourseInput(input);
+  const payload: Omit<Course, "id"> = {
+    title: sanitizeString(normalized.title),
+    slug: sanitizeString(normalized.slug).toLowerCase(),
+    description: sanitizeString(normalized.description),
+    coverImage: sanitizeString(normalized.coverImage),
+    typeSlug: normalizeCourseTypeSlug(normalized.typeSlug),
+    templateId: sanitizeString(normalized.templateId),
+    lessons: (normalized.lessons ?? []) as Course["lessons"],
+    passingScore: Number(normalized.passingScore ?? 70),
+    questions: (normalized.questions ?? []) as Course["questions"],
+    adsEnabled: normalized.adsEnabled === true,
+    adIds: normalizeCourseAdIds(normalized.adIds),
+    isPublished: normalized.isPublished === true,
     updatedAt: new Date().toISOString()
   };
 
@@ -1611,15 +1936,17 @@ export async function createCourse(input: Omit<Course, "id" | "updatedAt">): Pro
 }
 
 export async function updateCourse(id: string, input: Partial<Omit<Course, "id" | "updatedAt">>): Promise<void> {
+  const normalized = normalizeCourseInput(input);
+
   if (!hasFirebaseConfig || !db) {
     localStore.courses = localStore.courses.map((item) =>
-      item.id === id ? { ...item, ...input, updatedAt: new Date().toISOString() } : item
+      item.id === id ? { ...item, ...normalized, updatedAt: new Date().toISOString() } : item
     );
     return;
   }
 
   await updateDoc(doc(db, "courses", id), {
-    ...input,
+    ...normalized,
     updatedAt: serverTimestamp()
   });
 }
@@ -2481,4 +2808,12 @@ export async function getVisitorAnalytics(): Promise<VisitorAnalyticsSummary> {
     byCountry
   };
 }
+
+
+
+
+
+
+
+
 

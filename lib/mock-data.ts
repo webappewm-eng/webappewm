@@ -3,6 +3,8 @@ import {
   CertificateTemplate,
   CommunityCategory,
   Course,
+  CourseAd,
+  CourseType,
   CustomPage,
   HeroMediaItem,
   LandingTopic,
@@ -184,6 +186,11 @@ export const mockWebinars: Webinar[] = [
   }
 ];
 
+export const mockCourseTypes: CourseType[] = [
+  { id: "course-type-basics", name: "Basics", slug: "basics", order: 1, enabled: true, updatedAt: "2026-03-29" },
+  { id: "course-type-free", name: "Free Learning", slug: "free-learning", order: 2, enabled: true, updatedAt: "2026-03-29" },
+  { id: "course-type-paid", name: "Paid Course", slug: "paid-course", order: 3, enabled: true, updatedAt: "2026-03-29" }
+];
 export const mockCourses: Course[] = [
   {
     id: "course-electronics-starter",
@@ -191,6 +198,7 @@ export const mockCourses: Course[] = [
     slug: "electronics-starter-certification",
     description: "Start from basics and complete quiz to unlock certificate.",
     coverImage: "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1400&q=80",
+    typeSlug: "basics",
     templateId: "template-classic",
     lessons: [
       { id: "lesson-1", title: "Current and Voltage", content: "Understand electrical flow.", order: 1 },
@@ -210,11 +218,14 @@ export const mockCourses: Course[] = [
         correctOptionIndex: 0
       }
     ],
+    adsEnabled: false,
+    adIds: [],
     isPublished: true,
     updatedAt: "2026-03-29"
   }
 ];
 
+export const mockCourseAds: CourseAd[] = [];
 export const mockCertificateTemplates: CertificateTemplate[] = [
   {
     id: "template-classic",
@@ -356,3 +367,6 @@ export const mockSiteSettings: SiteSettings = {
 };
 
 export const mockLandingTopics: LandingTopic[] = [];
+
+
+

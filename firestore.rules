@@ -140,6 +140,15 @@ service cloud.firestore {
       allow read: if true;
       allow write: if isAdmin();
     }
+    match /course_types/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /course_ads/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
 
     match /course_progress/{docId} {
       allow create, update: if isSignedIn() && request.resource.data.userId == request.auth.uid;
@@ -168,6 +177,7 @@ service cloud.firestore {
     }
   }
 }
+
 
 
 

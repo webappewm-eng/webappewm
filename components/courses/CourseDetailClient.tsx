@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { LoginModal } from "@/components/auth/LoginModal";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -10,10 +11,12 @@ import {
   issueCertificate,
   upsertUserCourseProgress
 } from "@/lib/firebase/data";
-import { CertificateTemplate, Course, UserCertificate, UserCourseProgress } from "@/lib/types";
+import { CertificateTemplate, Course, CourseAd, UserCertificate, UserCourseProgress } from "@/lib/types";
 
 interface CourseDetailClientProps {
   course: Course;
+  ads?: CourseAd[];
+  nextCourse?: { slug: string; title: string } | null;
 }
 
 function openCertificatePrint(input: {
@@ -65,7 +68,46 @@ function openCertificatePrint(input: {
   popup.print();
 }
 
-export function CourseDetailClient({ course }: CourseDetailClientProps) {
+function renderAdItem(ad: CourseAd) {
+  if (ad.type === "code") {
+    const srcDoc = `<!doctype html><html><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /></head><body>${ad.code || ""}</body></html>`;
+    return (
+      <iframe
+        title={`course-ad-${ad.id}`}
+        srcDoc={srcDoc}
+        sandbox="allow-scripts allow-same-origin"
+        style={{ width: "100%", minHeight: "180px", border: "1px solid var(--border)", borderRadius: "8px" }}
+      />
+    );
+  }
+
+  if (ad.type === "video") {
+    const player = (
+      <video controls style={{ width: "100%", borderRadius: "8px", background: "#000" }}>
+        <source src={ad.source} />
+      </video>
+    );
+
+    return ad.redirectUrl ? (
+      <a href={ad.redirectUrl} target="_blank" rel="noreferrer">
+        {player}
+      </a>
+    ) : (
+      player
+    );
+  }
+
+  const image = <img src={ad.source} alt={ad.title || ad.name} style={{ width: "100%", borderRadius: "8px" }} />;
+  return ad.redirectUrl ? (
+    <a href={ad.redirectUrl} target="_blank" rel="noreferrer">
+      {image}
+    </a>
+  ) : (
+    image
+  );
+}
+
+export function CourseDetailClient({ course, ads = [], nextCourse = null }: CourseDetailClientProps) {
   const { user } = useAuth();
 
   const [progress, setProgress] = useState<UserCourseProgress | null>(null);
@@ -75,10 +117,23 @@ export function CourseDetailClient({ course }: CourseDetailClientProps) {
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
+  const [selectedLessonId, setSelectedLessonId] = useState("");
 
-  const lessonIds = useMemo(() => course.lessons.map((lesson) => lesson.id), [course.lessons]);
+  const sortedLessons = useMemo(
+    () => course.lessons.slice().sort((a, b) => a.order - b.order),
+    [course.lessons]
+  );
+
+  useEffect(() => {
+    setSelectedLessonId(sortedLessons[0]?.id ?? "");
+  }, [course.id, sortedLessons]);
+
+  const lessonIds = useMemo(() => sortedLessons.map((lesson) => lesson.id), [sortedLessons]);
   const completedSet = useMemo(() => new Set(progress?.completedLessonIds ?? []), [progress?.completedLessonIds]);
   const allLessonsCompleted = lessonIds.length > 0 && lessonIds.every((id) => completedSet.has(id));
+  const activeLessonIndex = Math.max(0, sortedLessons.findIndex((lesson) => lesson.id === selectedLessonId));
+  const activeLesson = sortedLessons[activeLessonIndex] ?? sortedLessons[0] ?? null;
+
   const activeTemplate = useMemo(() => {
     if (!templates.length) {
       return undefined;
@@ -265,35 +320,97 @@ export function CourseDetailClient({ course }: CourseDetailClientProps) {
 
   return (
     <>
+      {course.adsEnabled && ads.length ? (
+        <section className="post-content" style={{ marginTop: "1rem" }}>
+          <div className="post-content-inner">
+            <div className="label">Sponsored</div>
+            <div className="table-like" style={{ marginTop: "0.8rem" }}>
+              {ads.map((ad) => (
+                <article className="notice" key={`course-ad-${ad.id}`}>
+                  <strong>{ad.title || ad.name}</strong>
+                  <div style={{ marginTop: "0.6rem" }}>{renderAdItem(ad)}</div>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+      ) : null}
+
       <section className="post-content" style={{ marginTop: "1rem" }}>
         <div className="post-content-inner">
-          <div className="label">Course Lessons</div>
-          <p className="muted">Mark lessons complete to unlock the certification test.</p>
+          <div className="label">Course Sections</div>
+          <p className="muted">Use the sidebar to open each section. Mark each one complete to unlock the test.</p>
 
-          <div className="table-like" style={{ marginTop: "0.9rem" }}>
-            {course.lessons
-              .slice()
-              .sort((a, b) => a.order - b.order)
-              .map((lesson) => {
-                const checked = completedSet.has(lesson.id);
-                return (
-                  <article className="notice" key={lesson.id}>
-                    <div className="form-actions" style={{ justifyContent: "space-between", alignItems: "center" }}>
-                      <strong>{lesson.title}</strong>
-                      <label style={{ display: "inline-flex", gap: "0.45rem", alignItems: "center" }}>
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          disabled={busy}
-                          onChange={() => void toggleLesson(lesson.id)}
-                        />
-                        Complete
-                      </label>
-                    </div>
-                    <p className="muted" style={{ marginTop: "0.5rem" }}>{lesson.content}</p>
-                  </article>
-                );
-              })}
+          <div
+            style={{
+              display: "grid",
+              gap: "1rem",
+              gridTemplateColumns: sortedLessons.length > 1 ? "minmax(220px, 280px) minmax(0, 1fr)" : "minmax(0, 1fr)"
+            }}
+          >
+            {sortedLessons.length > 1 ? (
+              <aside className="notice" style={{ alignSelf: "start" }}>
+                <strong>Available Sections</strong>
+                <div className="table-like" style={{ marginTop: "0.7rem" }}>
+                  {sortedLessons.map((lesson, index) => {
+                    const completed = completedSet.has(lesson.id);
+                    const active = activeLesson?.id === lesson.id;
+                    return (
+                      <button
+                        key={`course-lesson-nav-${lesson.id}`}
+                        className={`btn ${active ? "btn-primary" : "btn-outline"}`}
+                        type="button"
+                        onClick={() => setSelectedLessonId(lesson.id)}
+                      >
+                        {index + 1}. {lesson.title} {completed ? "(Done)" : ""}
+                      </button>
+                    );
+                  })}
+                </div>
+              </aside>
+            ) : null}
+
+            <article className="notice">
+              {activeLesson ? (
+                <>
+                  <div className="form-actions" style={{ justifyContent: "space-between", alignItems: "center" }}>
+                    <strong>{activeLesson.title}</strong>
+                    <label style={{ display: "inline-flex", gap: "0.45rem", alignItems: "center" }}>
+                      <input
+                        type="checkbox"
+                        checked={completedSet.has(activeLesson.id)}
+                        disabled={busy}
+                        onChange={() => void toggleLesson(activeLesson.id)}
+                      />
+                      Complete
+                    </label>
+                  </div>
+
+                  <p className="muted" style={{ marginTop: "0.7rem", whiteSpace: "pre-wrap" }}>{activeLesson.content}</p>
+
+                  <div className="form-actions" style={{ marginTop: "0.8rem", justifyContent: "space-between" }}>
+                    <button
+                      className="btn btn-outline"
+                      type="button"
+                      disabled={activeLessonIndex <= 0}
+                      onClick={() => setSelectedLessonId(sortedLessons[Math.max(0, activeLessonIndex - 1)]?.id ?? activeLesson.id)}
+                    >
+                      Previous Section
+                    </button>
+                    <button
+                      className="btn btn-primary"
+                      type="button"
+                      disabled={activeLessonIndex >= sortedLessons.length - 1}
+                      onClick={() => setSelectedLessonId(sortedLessons[Math.min(sortedLessons.length - 1, activeLessonIndex + 1)]?.id ?? activeLesson.id)}
+                    >
+                      Next Section
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <p className="muted">No sections configured for this course yet.</p>
+              )}
+            </article>
           </div>
         </div>
       </section>
@@ -360,6 +477,14 @@ export function CourseDetailClient({ course }: CourseDetailClientProps) {
             </div>
           ) : null}
 
+          {nextCourse ? (
+            <div className="form-actions" style={{ marginTop: "0.75rem" }}>
+              <Link className="btn btn-primary" href={`/courses/${nextCourse.slug}`}>
+                Move to Next Course: {nextCourse.title}
+              </Link>
+            </div>
+          ) : null}
+
           {status ? <div className="notice" style={{ marginTop: "0.8rem" }}>{status}</div> : null}
         </div>
       </section>
@@ -368,4 +493,3 @@ export function CourseDetailClient({ course }: CourseDetailClientProps) {
     </>
   );
 }
-

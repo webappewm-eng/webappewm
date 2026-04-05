@@ -4,9 +4,9 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { logoutUser } from "@/lib/firebase/auth";
-import { getNavigationLinks, getSiteSettings, getVisitorAnalytics } from "@/lib/firebase/data";
+import { getCourseTypes, getNavigationLinks, getSiteSettings, getVisitorAnalytics } from "@/lib/firebase/data";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { NavigationLink, SiteSettings } from "@/lib/types";
+import { CourseType, NavigationLink, SiteSettings } from "@/lib/types";
 
 interface HeaderProps {
   onOpenLogin?: () => void;
@@ -73,6 +73,12 @@ const fallbackSiteSettings: Pick<
   logoTitleLine2: "With",
   logoAccentText: "Me"
 };
+
+const fallbackCourseTypes: CourseType[] = [
+  { id: "fallback-basics", name: "Basics", slug: "basics", order: 1, enabled: true, updatedAt: "" },
+  { id: "fallback-free", name: "Free Learning", slug: "free-learning", order: 2, enabled: true, updatedAt: "" },
+  { id: "fallback-paid", name: "Paid Course", slug: "paid-course", order: 3, enabled: true, updatedAt: "" }
+];
 
 function isExternalUrl(value: string): boolean {
   return /^https?:\/\//i.test(value);
@@ -157,6 +163,7 @@ export function Header({ onOpenLogin, searchValue = "", onSearchChange, showSear
   const [themeMode, setThemeMode] = useState<"light" | "dark">("light");
   const [internalSearch, setInternalSearch] = useState(searchValue);
   const [visitorCount, setVisitorCount] = useState(0);
+  const [courseTypes, setCourseTypes] = useState<CourseType[]>(fallbackCourseTypes);
 
   useEffect(() => {
     setInternalSearch(searchValue);
@@ -177,6 +184,22 @@ export function Header({ onOpenLogin, searchValue = "", onSearchChange, showSear
     void loadLinks();
   }, []);
 
+  useEffect(() => {
+    async function loadCourseTypes() {
+      try {
+        const rows = await getCourseTypes();
+        if (rows.length) {
+          setCourseTypes(rows);
+          return;
+        }
+      } catch {
+        // fallback handled below
+      }
+      setCourseTypes(fallbackCourseTypes);
+    }
+
+    void loadCourseTypes();
+  }, []);
 
   useEffect(() => {
     async function loadVisitorCount() {
@@ -196,6 +219,7 @@ export function Header({ onOpenLogin, searchValue = "", onSearchChange, showSear
       window.clearInterval(timer);
     };
   }, []);
+
   useEffect(() => {
     async function loadSettings() {
       try {
@@ -251,6 +275,7 @@ export function Header({ onOpenLogin, searchValue = "", onSearchChange, showSear
   );
 
   const topLinks = useMemo(() => menuLinks.filter((item) => !item.parentId), [menuLinks]);
+  const courseTypeLinks = useMemo(() => courseTypes.filter((item) => item.enabled), [courseTypes]);
   const childrenMap = useMemo(() => {
     const map: Record<string, NavigationLink[]> = {};
     menuLinks.forEach((item) => {
@@ -289,6 +314,16 @@ export function Header({ onOpenLogin, searchValue = "", onSearchChange, showSear
             <MenuLink key={item.id} item={item} pathname={pathname} childrenLinks={childrenMap[item.id] ?? []} />
           ))}
         </nav>
+
+        {courseTypeLinks.length ? (
+          <div className="form-actions" style={{ marginTop: "0.3rem", flexWrap: "wrap", justifyContent: "center" }}>
+            {courseTypeLinks.map((item) => (
+              <Link key={`header-course-type-${item.id}`} href={`/courses?type=${encodeURIComponent(item.slug)}`} className="btn btn-outline">
+                {item.slug === "basics" ? "Basics (All)" : item.name}
+              </Link>
+            ))}
+          </div>
+        ) : null}
 
         {showSearch ? (
           <form className="nav-search-wrap" onSubmit={handleSearchSubmit}>

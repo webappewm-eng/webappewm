@@ -1,11 +1,11 @@
-﻿import type { Metadata } from "next";
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
 import { CourseDetailClient } from "@/components/courses/CourseDetailClient";
-import { getCourseBySlug, getCourses } from "@/lib/firebase/data";
+import { getCourseAds, getCourses } from "@/lib/firebase/data";
 
 export const revalidate = 60;
 export const dynamicParams = true;
@@ -38,7 +38,9 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const course = await getCourseBySlug(slug).catch(() => null);
+  const courses = await getCourses(false).catch(() => []);
+  const normalized = slug.trim().toLowerCase();
+  const course = courses.find((item) => item.slug.toLowerCase() === normalized) ?? null;
 
   if (!course) {
     return { title: "Course Not Found" };
@@ -61,11 +63,28 @@ export default async function CourseDetailPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const course = await getCourseBySlug(slug).catch(() => null);
+  const normalized = slug.trim().toLowerCase();
+
+  const [courses, courseAds] = await Promise.all([
+    getCourses(false).catch(() => []),
+    getCourseAds().catch(() => [])
+  ]);
+
+  const course = courses.find((item) => item.slug.toLowerCase() === normalized) ?? null;
 
   if (!course) {
     notFound();
   }
+
+  const selectedAds = course.adsEnabled
+    ? courseAds.filter((item) => item.enabled && course.adIds.includes(item.id))
+    : [];
+
+  const currentIndex = courses.findIndex((item) => item.id === course.id);
+  const nextCourse =
+    currentIndex >= 0 && currentIndex < courses.length - 1
+      ? { slug: courses[currentIndex + 1].slug, title: courses[currentIndex + 1].title }
+      : null;
 
   return (
     <div className="app-shell">
@@ -86,12 +105,10 @@ export default async function CourseDetailPage({
             </div>
           </article>
 
-          <CourseDetailClient course={course} />
+          <CourseDetailClient course={course} ads={selectedAds} nextCourse={nextCourse} />
         </div>
       </main>
       <Footer />
     </div>
   );
 }
-
-

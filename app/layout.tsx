@@ -4,9 +4,11 @@ import "./globals.css";
 import { AuthProvider } from "@/components/auth/AuthProvider";
 import { LiveTracker } from "@/components/layout/LiveTracker";
 import { PwaRegister } from "@/components/layout/PwaRegister";
+import { SiteBootstrapProvider } from "@/components/layout/SiteBootstrapProvider";
 import { ThirdPartyScripts } from "@/components/layout/ThirdPartyScripts";
 import { ThemeSync } from "@/components/layout/ThemeSync";
 import { getSiteSettings } from "@/lib/firebase/data";
+import { getCachedSiteBootstrapSnapshot } from "@/lib/server/page-cache";
 
 function toMetadataBase(siteUrl: string): URL {
   try {
@@ -61,27 +63,21 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
-  let themeMode: "light" | "dark" = "light";
-  let layoutSideGap = 32;
-
-  try {
-    const settings = await getSiteSettings();
-    themeMode = settings.themeMode;
-    layoutSideGap = settings.layoutSideGap;
-  } catch {
-    themeMode = "light";
-    layoutSideGap = 32;
-  }
+  const bootstrap = await getCachedSiteBootstrapSnapshot();
+  const themeMode = bootstrap.siteSettings.themeMode;
+  const layoutSideGap = bootstrap.siteSettings.layoutSideGap;
 
   return (
     <html lang="en" data-theme={themeMode} style={{ "--container-pad": `${layoutSideGap}px` } as CSSProperties}>
       <body>
         <AuthProvider>
-          <PwaRegister />
-          <LiveTracker />
-          <ThirdPartyScripts />
-          <ThemeSync />
-          {children}
+          <SiteBootstrapProvider snapshot={bootstrap}>
+            <PwaRegister />
+            <LiveTracker />
+            <ThirdPartyScripts />
+            <ThemeSync />
+            {children}
+          </SiteBootstrapProvider>
         </AuthProvider>
       </body>
     </html>

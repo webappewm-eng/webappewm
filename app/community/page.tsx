@@ -1,31 +1,17 @@
 import CommunityPageClient from "@/components/community/CommunityPageClient";
-import {
-  getCommunityAnswersForPublic,
-  getCommunityCategories,
-  getCommunityQuestionsForPublic,
-  getSiteSettings
-} from "@/lib/firebase/data";
+import { getCachedCommunityPageData } from "@/lib/server/page-cache";
 
 export const revalidate = 30;
 
 export default async function CommunityPage() {
-  try {
-    const [settings, categories, questions, answers] = await Promise.all([
-      getSiteSettings(),
-      getCommunityCategories(),
-      getCommunityQuestionsForPublic(),
-      getCommunityAnswersForPublic()
-    ]);
+  const data = await getCachedCommunityPageData();
 
-    return (
-      <CommunityPageClient
-        initialSettings={{ communityApprovalEnabled: settings.communityApprovalEnabled }}
-        initialCategories={categories}
-        initialQuestions={questions}
-        initialAnswers={answers}
-      />
-    );
-  } catch {
-    return <CommunityPageClient />;
-  }
+  return (
+    <CommunityPageClient
+      initialSettings={data.settings}
+      initialCategories={data.categories}
+      initialQuestions={data.questions}
+      initialAnswers={data.answers}
+    />
+  );
 }

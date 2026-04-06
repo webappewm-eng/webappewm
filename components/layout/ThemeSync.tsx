@@ -1,25 +1,17 @@
-﻿"use client";
+"use client";
 
 import { useEffect } from "react";
-import { getSiteSettings } from "@/lib/firebase/data";
+import { useSiteBootstrap } from "@/components/layout/SiteBootstrapProvider";
 
 export function ThemeSync() {
-  useEffect(() => {
-    async function applyTheme() {
-      try {
-        const settings = await getSiteSettings();
-        document.documentElement.setAttribute("data-theme", settings.themeMode);
-        document.documentElement.style.setProperty("--container-pad", `${settings.layoutSideGap}px`);
-      } catch {
-        document.documentElement.setAttribute("data-theme", "light");
-        document.documentElement.style.setProperty("--container-pad", "32px");
-      }
-    }
+  const bootstrap = useSiteBootstrap();
 
-    void applyTheme();
-  }, []);
+  useEffect(() => {
+    const preferred = localStorage.getItem("ewm-theme") as "light" | "dark" | null;
+    const nextMode = preferred || bootstrap.siteSettings.themeMode;
+    document.documentElement.setAttribute("data-theme", nextMode);
+    document.documentElement.style.setProperty("--container-pad", `${bootstrap.siteSettings.layoutSideGap}px`);
+  }, [bootstrap.siteSettings.themeMode, bootstrap.siteSettings.layoutSideGap]);
 
   return null;
 }
-
-

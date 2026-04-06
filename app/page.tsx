@@ -1,6 +1,5 @@
 import HomePageClient from "@/components/home/HomePageClient";
-import { getCategories, getHeroMedia, getPosts, getSiteSettings, getSubtopics, getWebinars } from "@/lib/firebase/data";
-import { Category, HeroMediaItem, Post, Subtopic, Webinar } from "@/lib/types";
+import { getCachedHomePageData } from "@/lib/server/page-cache";
 
 export const revalidate = 60;
 
@@ -11,54 +10,13 @@ function firstParam(value: string | string[] | undefined): string {
   return value ?? "";
 }
 
-async function loadHomeData(): Promise<{
-  categories: Category[];
-  subtopics: Subtopic[];
-  posts: Post[];
-  imageSlides: HeroMediaItem[];
-  webinars: Webinar[];
-  previewPercent: number;
-  heroImageSliderEnabled: boolean;
-}> {
-  try {
-    const [categories, subtopics, posts, imageSlides, webinars, settings] = await Promise.all([
-      getCategories(),
-      getSubtopics(),
-      getPosts(),
-      getHeroMedia("image"),
-      getWebinars(false),
-      getSiteSettings()
-    ]);
-
-    return {
-      categories,
-      subtopics,
-      posts,
-      imageSlides,
-      webinars,
-      previewPercent: settings.contentPreviewPercent,
-      heroImageSliderEnabled: settings.heroImageSliderEnabled
-    };
-  } catch {
-    return {
-      categories: [],
-      subtopics: [],
-      posts: [],
-      imageSlides: [],
-      webinars: [],
-      previewPercent: 20,
-      heroImageSliderEnabled: false
-    };
-  }
-}
-
 export default async function HomePage({
   searchParams
 }: {
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = (await searchParams) ?? {};
-  const data = await loadHomeData();
+  const data = await getCachedHomePageData();
 
   return (
     <HomePageClient

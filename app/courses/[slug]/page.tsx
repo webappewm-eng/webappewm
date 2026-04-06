@@ -5,7 +5,7 @@ import { notFound } from "next/navigation";
 import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
 import { CourseDetailClient } from "@/components/courses/CourseDetailClient";
-import { getCourseAds, getCourses } from "@/lib/firebase/data";
+import { getCachedCourseAds, getCachedPublishedCourses } from "@/lib/server/page-cache";
 
 export const revalidate = 60;
 export const dynamicParams = true;
@@ -25,7 +25,7 @@ function safeImage(url: string): string {
 
 export async function generateStaticParams() {
   try {
-    const courses = await getCourses(false);
+    const courses = await getCachedPublishedCourses();
     return courses.map((item) => ({ slug: item.slug }));
   } catch {
     return [];
@@ -38,7 +38,7 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const courses = await getCourses(false).catch(() => []);
+  const courses = await getCachedPublishedCourses();
   const normalized = slug.trim().toLowerCase();
   const course = courses.find((item) => item.slug.toLowerCase() === normalized) ?? null;
 
@@ -66,8 +66,8 @@ export default async function CourseDetailPage({
   const normalized = slug.trim().toLowerCase();
 
   const [courses, courseAds] = await Promise.all([
-    getCourses(false).catch(() => []),
-    getCourseAds().catch(() => [])
+    getCachedPublishedCourses(),
+    getCachedCourseAds()
   ]);
 
   const course = courses.find((item) => item.slug.toLowerCase() === normalized) ?? null;

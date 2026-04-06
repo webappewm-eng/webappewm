@@ -5,7 +5,7 @@ import { DesignFrame } from "@/components/design/DesignFrame";
 import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
 import { ArticleRenderer } from "@/components/post/ArticleRenderer";
-import { getCustomPageBySlug, getCustomPages } from "@/lib/firebase/data";
+import { getCachedCustomPageBySlug, getCachedPublishedCustomPages } from "@/lib/server/page-cache";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -16,7 +16,7 @@ export const dynamicParams = true;
 
 export async function generateStaticParams() {
   try {
-    const pages = await getCustomPages(false);
+    const pages = await getCachedPublishedCustomPages();
     return pages.map((page) => ({ slug: page.slug }));
   } catch {
     return [];
@@ -25,7 +25,7 @@ export async function generateStaticParams() {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const page = await getCustomPageBySlug(slug);
+  const page = await getCachedCustomPageBySlug(slug);
 
   if (!page) {
     return {
@@ -41,7 +41,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function CustomPageRoute({ params }: PageProps) {
   const { slug } = await params;
-  const page = await getCustomPageBySlug(slug);
+  const page = await getCachedCustomPageBySlug(slug);
 
   if (!page) {
     notFound();

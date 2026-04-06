@@ -154,7 +154,7 @@ export default function HomePageClient({
       .map((item) => ({
         id: item.id,
         name: item.name,
-        href: `/community?search=${encodeURIComponent(item.name)}`,
+        href: `/topic/${encodeURIComponent(item.slug)}`,
         categoryName: categoryNameById.get(item.categoryId) ?? "Topic"
       }));
   }, [allSubtopics, categories]);

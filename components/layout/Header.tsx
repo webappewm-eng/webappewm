@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { logoutUser } from "@/lib/firebase/auth";
-import { getNavigationLinks, getSiteSettings, getVisitorAnalytics } from "@/lib/firebase/data";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { LoginModal } from "@/components/auth/LoginModal";
-import { NavigationLink, SiteSettings } from "@/lib/types";
+import { useSiteBootstrap } from "@/components/layout/SiteBootstrapProvider";
+import { logoutUser } from "@/lib/firebase/auth";
+import { getNavigationLinks, getVisitorAnalytics } from "@/lib/firebase/data";
+import { NavigationLink } from "@/lib/types";
+import { fallbackHeaderLinks, fallbackSiteChromeSettings } from "@/lib/site/bootstrap";
 
 interface HeaderProps {
   onOpenLogin?: () => void;
@@ -15,65 +17,6 @@ interface HeaderProps {
   onSearchChange?: (value: string) => void;
   showSearch?: boolean;
 }
-
-const fallbackHeaderLinks: NavigationLink[] = [
-  {
-    id: "fallback-header-categories",
-    label: "Home",
-    href: "/",
-    location: "header",
-    order: 1,
-    parentId: "",
-    enabled: true,
-    openInNewTab: false,
-    updatedAt: ""
-  },
-  {
-    id: "fallback-header-topics",
-    label: "Courses",
-    href: "/courses",
-    location: "header",
-    order: 2,
-    parentId: "",
-    enabled: true,
-    openInNewTab: false,
-    updatedAt: ""
-  },
-  {
-    id: "fallback-header-community",
-    label: "Community",
-    href: "/community",
-    location: "header",
-    order: 3,
-    parentId: "",
-    enabled: true,
-    openInNewTab: false,
-    updatedAt: ""
-  },
-  {
-    id: "fallback-header-subscribe",
-    label: "Subscribe",
-    href: "#subscribe",
-    location: "header",
-    order: 4,
-    parentId: "",
-    enabled: true,
-    openInNewTab: false,
-    updatedAt: ""
-  }
-];
-
-const fallbackSiteSettings: Pick<
-  SiteSettings,
-  "logoMode" | "logoImageUrl" | "logoSize" | "logoTitleLine1" | "logoTitleLine2" | "logoAccentText"
-> = {
-  logoMode: "text",
-  logoImageUrl: "",
-  logoSize: 38,
-  logoTitleLine1: "Engineer",
-  logoTitleLine2: "With",
-  logoAccentText: "Me"
-};
 
 function isExternalUrl(value: string): boolean {
   return /^https?:\/\//i.test(value);
@@ -152,17 +95,30 @@ export function Header({ onOpenLogin, searchValue = "", onSearchChange, showSear
   const { profile } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
+  const bootstrap = useSiteBootstrap();
 
-  const [menuLinks, setMenuLinks] = useState<NavigationLink[]>(fallbackHeaderLinks);
-  const [siteSettings, setSiteSettings] = useState(fallbackSiteSettings);
-  const [themeMode, setThemeMode] = useState<"light" | "dark">("light");
+  const [menuLinks, setMenuLinks] = useState<NavigationLink[]>(
+    bootstrap.headerLinks.length ? bootstrap.headerLinks : fallbackHeaderLinks
+  );
+  const [siteSettings, setSiteSettings] = useState(
+    bootstrap.siteSettings.logoTitleLine1 ? bootstrap.siteSettings : fallbackSiteChromeSettings
+  );
+  const [themeMode, setThemeMode] = useState<"light" | "dark">(bootstrap.siteSettings.themeMode);
   const [internalSearch, setInternalSearch] = useState(searchValue);
-  const [visitorCount, setVisitorCount] = useState(0);
+  const [visitorCount, setVisitorCount] = useState(bootstrap.visitorCount);
   const [loginOpenInternal, setLoginOpenInternal] = useState(false);
 
   useEffect(() => {
     setInternalSearch(searchValue);
   }, [searchValue]);
+
+  useEffect(() => {
+    if (bootstrap.headerLinks.length) {
+      setMenuLinks(bootstrap.headerLinks);
+    }
+    setSiteSettings(bootstrap.siteSettings);
+    setVisitorCount(bootstrap.visitorCount);
+  }, [bootstrap.headerLinks, bootstrap.siteSettings, bootstrap.visitorCount]);
 
   useEffect(() => {
     async function loadLinks() {
@@ -172,7 +128,7 @@ export function Header({ onOpenLogin, searchValue = "", onSearchChange, showSear
           setMenuLinks(rows);
         }
       } catch {
-        setMenuLinks(fallbackHeaderLinks);
+        // Keep server-hydrated links on failure.
       }
     }
 
@@ -185,11 +141,10 @@ export function Header({ onOpenLogin, searchValue = "", onSearchChange, showSear
         const analytics = await getVisitorAnalytics();
         setVisitorCount(analytics.totalVisitors);
       } catch {
-        setVisitorCount(0);
+        // Keep current count on failure.
       }
     }
 
-    void loadVisitorCount();
     const delayed = window.setTimeout(() => void loadVisitorCount(), 1500);
     const timer = window.setInterval(() => void loadVisitorCount(), 30000);
     return () => {
@@ -199,29 +154,12 @@ export function Header({ onOpenLogin, searchValue = "", onSearchChange, showSear
   }, []);
 
   useEffect(() => {
-    async function loadSettings() {
-      try {
-        const settings = await getSiteSettings();
-        setSiteSettings({
-          logoMode: settings.logoMode,
-          logoImageUrl: settings.logoImageUrl,
-          logoSize: settings.logoSize,
-          logoTitleLine1: settings.logoTitleLine1,
-          logoTitleLine2: settings.logoTitleLine2,
-          logoAccentText: settings.logoAccentText
-        });
-
-        const preferred = localStorage.getItem("ewm-theme") as "light" | "dark" | null;
-        const nextMode = preferred || settings.themeMode;
-        setThemeMode(nextMode);
-        document.documentElement.setAttribute("data-theme", nextMode);
-      } catch {
-        setSiteSettings(fallbackSiteSettings);
-      }
-    }
-
-    void loadSettings();
-  }, []);
+    const preferred = localStorage.getItem("ewm-theme") as "light" | "dark" | null;
+    const nextMode = preferred || bootstrap.siteSettings.themeMode;
+    setThemeMode(nextMode);
+    document.documentElement.setAttribute("data-theme", nextMode);
+    document.documentElement.style.setProperty("--container-pad", `${bootstrap.siteSettings.layoutSideGap}px`);
+  }, [bootstrap.siteSettings.themeMode, bootstrap.siteSettings.layoutSideGap]);
 
   function toggleTheme() {
     const nextMode: "light" | "dark" = themeMode === "dark" ? "light" : "dark";

@@ -3,7 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
-import { getCourses, getCourseTypes } from "@/lib/firebase/data";
+import { getCachedCoursesPageData } from "@/lib/server/page-cache";
 
 export const revalidate = 60;
 
@@ -33,10 +33,7 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
   const params = searchParams ? await searchParams : undefined;
   const requestedType = (params?.type ?? "basics").toString().trim().toLowerCase();
 
-  const [courses, courseTypes] = await Promise.all([
-    getCourses(false).catch(() => []),
-    getCourseTypes().catch(() => [])
-  ]);
+  const { courses, courseTypes } = await getCachedCoursesPageData();
 
   const enabledTypes = courseTypes.length
     ? courseTypes

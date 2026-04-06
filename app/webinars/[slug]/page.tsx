@@ -1,11 +1,11 @@
-﻿import type { Metadata } from "next";
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
 import { WebinarDetailClient } from "@/components/webinars/WebinarDetailClient";
-import { getWebinarBySlug, getWebinars } from "@/lib/firebase/data";
+import { getCachedPublishedWebinars, getCachedWebinarBySlug } from "@/lib/server/page-cache";
 
 export const revalidate = 60;
 export const dynamicParams = true;
@@ -25,7 +25,7 @@ function safeImage(url: string): string {
 
 export async function generateStaticParams() {
   try {
-    const webinars = await getWebinars(false);
+    const webinars = await getCachedPublishedWebinars();
     return webinars.map((item) => ({ slug: item.slug }));
   } catch {
     return [];
@@ -38,7 +38,7 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const webinar = await getWebinarBySlug(slug).catch(() => null);
+  const webinar = await getCachedWebinarBySlug(slug);
 
   if (!webinar || !webinar.showPublicPage) {
     return { title: "Webinar Not Found" };
@@ -61,7 +61,7 @@ export default async function WebinarDetailPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const webinar = await getWebinarBySlug(slug).catch(() => null);
+  const webinar = await getCachedWebinarBySlug(slug);
 
   if (!webinar || !webinar.showPublicPage) {
     notFound();

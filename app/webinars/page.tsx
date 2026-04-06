@@ -1,9 +1,9 @@
-﻿import type { Metadata } from "next";
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
-import { getWebinars } from "@/lib/firebase/data";
+import { getCachedPublishedWebinars } from "@/lib/server/page-cache";
 
 export const revalidate = 60;
 
@@ -26,7 +26,7 @@ function safeImage(url: string): string {
 }
 
 export default async function WebinarsPage() {
-  const webinars = await getWebinars(false).catch(() => []);
+  const webinars = await getCachedPublishedWebinars();
 
   return (
     <div className="app-shell">

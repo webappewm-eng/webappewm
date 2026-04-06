@@ -3,53 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { CSSProperties, FormEvent, useEffect, useMemo, useState } from "react";
-import { getNavigationLinks, getSiteSettings, getSocialLinks, saveSubscription } from "@/lib/firebase/data";
-import { NavigationLink, SiteSettings, SocialLink } from "@/lib/types";
-
-const fallbackFooterLinks: NavigationLink[] = [
-  {
-    id: "fallback-footer-terms",
-    label: "Terms and Conditions",
-    href: "/pages/terms-and-conditions",
-    location: "footer",
-    order: 1,
-    enabled: true,
-    openInNewTab: false,
-    updatedAt: ""
-  },
-  {
-    id: "fallback-footer-privacy",
-    label: "Privacy Policy",
-    href: "/pages/privacy-policy",
-    location: "footer",
-    order: 2,
-    enabled: true,
-    openInNewTab: false,
-    updatedAt: ""
-  },
-  {
-    id: "fallback-footer-about",
-    label: "About",
-    href: "/pages/about",
-    location: "footer",
-    order: 3,
-    enabled: true,
-    openInNewTab: false,
-    updatedAt: ""
-  }
-];
-
-const fallbackSiteSettings: Pick<
-  SiteSettings,
-  "logoMode" | "logoImageUrl" | "logoSize" | "logoTitleLine1" | "logoTitleLine2" | "logoAccentText"
-> = {
-  logoMode: "text",
-  logoImageUrl: "",
-  logoSize: 38,
-  logoTitleLine1: "Engineer",
-  logoTitleLine2: "With",
-  logoAccentText: "Me"
-};
+import { getNavigationLinks, getSocialLinks, saveSubscription } from "@/lib/firebase/data";
+import { useSiteBootstrap } from "@/components/layout/SiteBootstrapProvider";
+import { NavigationLink, SocialLink } from "@/lib/types";
+import { fallbackFooterLinks, fallbackSiteChromeSettings } from "@/lib/site/bootstrap";
 
 type PlatformKey =
   | "youtube"
@@ -224,13 +181,18 @@ function SocialItem({ item, floating = false }: { item: SocialLink; floating?: b
 
 export function Footer() {
   const pathname = usePathname();
+  const bootstrap = useSiteBootstrap();
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState("");
-  const [footerLinks, setFooterLinks] = useState<NavigationLink[]>(fallbackFooterLinks);
-  const [footerSocialLinks, setFooterSocialLinks] = useState<SocialLink[]>([]);
-  const [floatingSocialLinks, setFloatingSocialLinks] = useState<SocialLink[]>([]);
+  const [footerLinks, setFooterLinks] = useState<NavigationLink[]>(
+    bootstrap.footerLinks.length ? bootstrap.footerLinks : fallbackFooterLinks
+  );
+  const [footerSocialLinks, setFooterSocialLinks] = useState<SocialLink[]>(bootstrap.footerSocialLinks);
+  const [floatingSocialLinks, setFloatingSocialLinks] = useState<SocialLink[]>(bootstrap.floatingSocialLinks);
   const [floatingOpen, setFloatingOpen] = useState(true);
-  const [siteSettings, setSiteSettings] = useState(fallbackSiteSettings);
+  const [siteSettings, setSiteSettings] = useState(
+    bootstrap.siteSettings.logoTitleLine1 ? bootstrap.siteSettings : fallbackSiteChromeSettings
+  );
 
   useEffect(() => {
     async function loadLinks() {
@@ -240,7 +202,7 @@ export function Footer() {
           setFooterLinks(rows);
         }
       } catch {
-        setFooterLinks(fallbackFooterLinks);
+        // Keep server-hydrated links on failure.
       }
     }
 
@@ -248,32 +210,30 @@ export function Footer() {
   }, []);
 
   useEffect(() => {
-    async function loadSettings() {
+    setSiteSettings(bootstrap.siteSettings);
+    if (bootstrap.footerLinks.length) {
+      setFooterLinks(bootstrap.footerLinks);
+    }
+    setFooterSocialLinks(bootstrap.footerSocialLinks);
+    setFloatingSocialLinks(bootstrap.floatingSocialLinks);
+  }, [bootstrap.footerLinks, bootstrap.footerSocialLinks, bootstrap.floatingSocialLinks, bootstrap.siteSettings]);
+
+  useEffect(() => {
+    async function loadSocial() {
       try {
-        const [settings, footerSocial, floatingSocial] = await Promise.all([
-          getSiteSettings(),
+        const [footerSocial, floatingSocial] = await Promise.all([
           getSocialLinks("footer"),
           getSocialLinks("floating")
         ]);
 
-        setSiteSettings({
-          logoMode: settings.logoMode,
-          logoImageUrl: settings.logoImageUrl,
-          logoSize: settings.logoSize,
-          logoTitleLine1: settings.logoTitleLine1,
-          logoTitleLine2: settings.logoTitleLine2,
-          logoAccentText: settings.logoAccentText
-        });
         setFooterSocialLinks(footerSocial);
         setFloatingSocialLinks(floatingSocial);
       } catch {
-        setSiteSettings(fallbackSiteSettings);
-        setFooterSocialLinks([]);
-        setFloatingSocialLinks([]);
+        // Keep server-hydrated social links on failure.
       }
     }
 
-    void loadSettings();
+    void loadSocial();
   }, []);
 
   useEffect(() => {
@@ -403,7 +363,6 @@ export function Footer() {
     </>
   );
 }
-
 
 
 

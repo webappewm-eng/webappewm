@@ -364,14 +364,22 @@ export interface LandingTopic {
   id: string;
   title: string;
   slug: string;
+  description: string;
   html: string;
   css: string;
   js: string;
   showOnHome: boolean;
   showHeader: boolean;
   showFooter: boolean;
+  showTitle: boolean;
+  showDescription: boolean;
+  showBreadcrumb: boolean;
+  showActionButton: boolean;
+  actionButtonLabel: string;
+  actionButtonUrl: string;
   isPublished: boolean;
   updatedAt: string;
 }
+
 
 

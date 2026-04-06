@@ -875,6 +875,29 @@ select {
   margin-bottom: 1rem;
 }
 
+.topic-meta-wrap {
+  padding-top: 1.2rem;
+  padding-bottom: 0.9rem;
+}
+
+.topic-meta-wrap .h2 {
+  margin-bottom: 0.6rem;
+}
+
+.topic-meta-description {
+  margin: 0;
+  max-width: 72ch;
+  color: var(--text-2);
+}
+
+.topic-meta-actions {
+  margin-top: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
 .post-hero {
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -2015,24 +2038,49 @@ html[data-theme="dark"] .btn-primary {
   border-radius: 10px;
   background: var(--bg);
   padding: 0.55rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.courses-type-block.active {
+  border-color: rgba(255, 107, 0, 0.38);
+  background: linear-gradient(160deg, #fff8f2, #fffdfb);
+  box-shadow: 0 12px 24px rgba(255, 107, 0, 0.12);
+}
+
+.courses-type-block.inactive {
+  border-color: rgba(255, 107, 0, 0.22);
+  background: linear-gradient(180deg, #fff, #fffdf9);
 }
 
 .courses-type-link {
   display: block;
-  border: 1px solid rgba(255, 107, 0, 0.25);
   border-radius: 7px;
-  padding: 0.42rem 0.55rem;
+  padding: 0.45rem 0.58rem;
   font-family: var(--fc);
   letter-spacing: 0.08em;
   text-transform: uppercase;
   font-size: 0.72rem;
-  color: var(--orange-dim);
+  transition: transform 0.2s ease, border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+}
+
+.courses-type-link.inactive {
+  border: 1px solid rgba(255, 107, 0, 0.2);
+  background: linear-gradient(180deg, rgba(255, 107, 0, 0.08), rgba(255, 107, 0, 0.03));
+  color: #8a4b11;
+}
+
+.courses-type-link.inactive:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 107, 0, 0.4);
+  background: linear-gradient(180deg, rgba(255, 107, 0, 0.14), rgba(255, 107, 0, 0.05));
+  color: #6f3500;
 }
 
 .courses-type-link.active {
   background: linear-gradient(120deg, #ff6b00, #f79022);
   color: #fff;
-  border-color: #d56000;
+  border: 1px solid #d56000;
+  box-shadow: 0 10px 22px rgba(255, 107, 0, 0.28);
 }
 
 .courses-tree-list {
@@ -2194,4 +2242,121 @@ html[data-theme="dark"] .visitor-count-highlight {
 .course-cert-cta-copy p {
   margin: 0.45rem 0 0;
   color: var(--text-3);
+}
+
+
+
+/* Certification test redesign */
+.course-cert-cta-card {
+  border: 1px solid rgba(255, 107, 0, 0.22);
+  border-radius: 16px;
+  padding: 1.1rem;
+  background: linear-gradient(120deg, rgba(255, 107, 0, 0.09), rgba(255, 255, 255, 0.98));
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.course-cert-cta-copy {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.course-cert-cta-eyebrow {
+  margin: 0;
+  font-family: var(--fm);
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--orange-dim);
+}
+
+.course-cert-cta-copy h3 {
+  margin: 0;
+  font-size: clamp(1.2rem, 2.4vw, 1.45rem);
+  color: #321900;
+}
+
+.course-cert-cta-copy p {
+  margin: 0;
+  color: var(--text-2);
+  max-width: 70ch;
+}
+
+.course-cert-cta-meta {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.course-cert-cta-meta span {
+  border: 1px solid rgba(255, 107, 0, 0.28);
+  background: rgba(255, 255, 255, 0.75);
+  border-radius: 999px;
+  padding: 0.2rem 0.52rem;
+  font-family: var(--fm);
+  font-size: 0.66rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8a4000;
+}
+
+.course-cert-cta-btn {
+  min-height: 44px;
+  white-space: nowrap;
+}
+
+.course-cert-question-card {
+  border-radius: 12px;
+  padding: 0.95rem;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(255, 250, 245, 0.95));
+}
+
+.course-cert-question-title {
+  margin: 0;
+  font-size: 1.08rem;
+}
+
+.course-cert-question-options {
+  margin-top: 0.75rem;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.course-cert-option {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.6rem;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  padding: 0.62rem 0.75rem;
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.course-cert-option input {
+  margin: 0;
+  accent-color: #ff6b00;
+}
+
+.course-cert-option:hover {
+  border-color: rgba(255, 107, 0, 0.42);
+  box-shadow: 0 10px 20px rgba(255, 107, 0, 0.08);
+}
+
+.course-cert-option.selected {
+  border-color: rgba(255, 107, 0, 0.52);
+  background: linear-gradient(180deg, rgba(255, 107, 0, 0.12), rgba(255, 255, 255, 0.95));
+}
+
+@media (max-width: 760px) {
+  .course-cert-cta-btn {
+    width: 100%;
+    justify-content: center;
+  }
 }

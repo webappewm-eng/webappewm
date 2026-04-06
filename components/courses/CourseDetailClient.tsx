@@ -422,13 +422,18 @@ export function CourseDetailClient({ course, ads = [], nextCourse = null }: Cour
 
           <article className="course-cert-cta-card">
             <div className="course-cert-cta-copy">
+              <p className="course-cert-cta-eyebrow">Certification Test</p>
               <h3>Complete Test to Get Certified</h3>
               <p>
                 Login is required. Finish all sections, answer every question, and pass {course.passingScore}% to generate your certificate.
               </p>
+              <div className="course-cert-cta-meta">
+                <span>Pass mark: {course.passingScore}%</span>
+                <span>Questions: {course.questions.length}</span>
+              </div>
             </div>
             <button
-              className="btn btn-primary"
+              className="btn btn-primary course-cert-cta-btn"
               type="button"
               onClick={handleOpenTestPanel}
               disabled={busy || !hasTestQuestions}
@@ -440,21 +445,27 @@ export function CourseDetailClient({ course, ads = [], nextCourse = null }: Cour
           {testPanelOpen && hasTestQuestions ? (
             <form className="form-grid" onSubmit={submitTest} style={{ marginTop: "1rem" }}>
               {course.questions.map((question, questionIndex) => (
-                <article className="notice" key={`${course.id}-q-${questionIndex}`}>
-                  <strong>{questionIndex + 1}. {question.question}</strong>
-                  <div className="table-like" style={{ marginTop: "0.55rem" }}>
-                    {question.options.map((option, optionIndex) => (
-                      <label key={`${course.id}-q-${questionIndex}-o-${optionIndex}`} style={{ display: "flex", gap: "0.45rem", alignItems: "center" }}>
-                        <input
-                          type="radio"
-                          name={`question-${questionIndex}`}
-                          checked={answers[questionIndex] === optionIndex}
-                          onChange={() => setAnswers((prev) => ({ ...prev, [questionIndex]: optionIndex }))}
-                          disabled={busy}
-                        />
-                        {option}
-                      </label>
-                    ))}
+                <article className="notice course-cert-question-card" key={`${course.id}-q-${questionIndex}`}>
+                  <h4 className="course-cert-question-title">{questionIndex + 1}. {question.question}</h4>
+                  <div className="course-cert-question-options">
+                    {question.options.map((option, optionIndex) => {
+                      const selected = answers[questionIndex] === optionIndex;
+                      return (
+                        <label
+                          key={`${course.id}-q-${questionIndex}-o-${optionIndex}`}
+                          className={`course-cert-option ${selected ? "selected" : ""}`}
+                        >
+                          <input
+                            type="radio"
+                            name={`question-${questionIndex}`}
+                            checked={selected}
+                            onChange={() => setAnswers((prev) => ({ ...prev, [questionIndex]: optionIndex }))}
+                            disabled={busy}
+                          />
+                          <span>{option}</span>
+                        </label>
+                      );
+                    })}
                   </div>
                 </article>
               ))}
@@ -525,3 +536,5 @@ export function CourseDetailClient({ course, ads = [], nextCourse = null }: Cour
     </>
   );
 }
+
+

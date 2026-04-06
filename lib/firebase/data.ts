@@ -640,12 +640,19 @@ function mapLandingTopicDoc(data: Record<string, unknown>, id: string): LandingT
     id,
     title: String(data.title ?? "").trim(),
     slug: String(data.slug ?? "").trim(),
+    description: String(data.description ?? "").trim(),
     html: String(data.html ?? ""),
     css: String(data.css ?? ""),
     js: String(data.js ?? ""),
     showOnHome: data.showOnHome !== false,
     showHeader: data.showHeader !== false,
     showFooter: data.showFooter !== false,
+    showTitle: data.showTitle === true,
+    showDescription: data.showDescription === true,
+    showBreadcrumb: data.showBreadcrumb === true,
+    showActionButton: data.showActionButton === true,
+    actionButtonLabel: String(data.actionButtonLabel ?? "Open Topic").trim(),
+    actionButtonUrl: String(data.actionButtonUrl ?? "").trim(),
     isPublished: Boolean(data.isPublished),
     updatedAt: normalizeDate(data.updatedAt)
   };
@@ -2861,4 +2868,5 @@ export async function getVisitorCountryAnalyticsByDate(date: string): Promise<Ar
     .map(([country, count]) => ({ country, count }))
     .sort((a, b) => b.count - a.count || a.country.localeCompare(b.country));
 }
+
 

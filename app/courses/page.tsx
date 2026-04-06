@@ -80,8 +80,8 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
                 const typeHref = `/courses?type=${encodeURIComponent(typeItem.slug)}`;
 
                 return (
-                  <div key={`sidebar-type-${typeItem.id}`} className="courses-type-block">
-                    <Link href={typeHref} className={`courses-type-link ${typeActive ? "active" : ""}`}>
+                  <div key={`sidebar-type-${typeItem.id}`} className={`courses-type-block ${typeActive ? "active" : "inactive"}`}>
+                    <Link href={typeHref} className={`courses-type-link ${typeActive ? "active" : "inactive"}`}>
                       {typeItem.slug === "basics" ? "Basics (All)" : typeItem.name}
                     </Link>
 
@@ -146,4 +146,5 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
     </div>
   );
 }
+
 

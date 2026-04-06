@@ -212,12 +212,19 @@ const emptyTemplateForm = {
 const emptyLandingTopicForm = {
   title: "",
   slug: "",
+  description: "",
   html: "",
   css: "",
   js: "",
   showOnHome: true,
   showHeader: true,
   showFooter: true,
+  showTitle: false,
+  showDescription: false,
+  showBreadcrumb: false,
+  showActionButton: false,
+  actionButtonLabel: "Open Topic",
+  actionButtonUrl: "",
   isPublished: true
 };
 
@@ -1208,12 +1215,19 @@ export default function AdminPage() {
     const payload = {
       title: landingTopicForm.title.trim(),
       slug: slugify(landingTopicForm.slug || landingTopicForm.title),
+      description: landingTopicForm.description.trim(),
       html: landingTopicForm.html,
       css: landingTopicForm.css,
       js: landingTopicForm.js,
       showOnHome: landingTopicForm.showOnHome,
       showHeader: landingTopicForm.showHeader,
       showFooter: landingTopicForm.showFooter,
+      showTitle: landingTopicForm.showTitle,
+      showDescription: landingTopicForm.showDescription,
+      showBreadcrumb: landingTopicForm.showBreadcrumb,
+      showActionButton: landingTopicForm.showActionButton,
+      actionButtonLabel: landingTopicForm.actionButtonLabel.trim() || "Open Topic",
+      actionButtonUrl: landingTopicForm.actionButtonUrl.trim(),
       isPublished: landingTopicForm.isPublished
     };
 
@@ -1244,12 +1258,19 @@ export default function AdminPage() {
     const payload = {
       title: landingTopicEditForm.title.trim(),
       slug: slugify(landingTopicEditForm.slug || landingTopicEditForm.title),
+      description: landingTopicEditForm.description.trim(),
       html: landingTopicEditForm.html,
       css: landingTopicEditForm.css,
       js: landingTopicEditForm.js,
       showOnHome: landingTopicEditForm.showOnHome,
       showHeader: landingTopicEditForm.showHeader,
       showFooter: landingTopicEditForm.showFooter,
+      showTitle: landingTopicEditForm.showTitle,
+      showDescription: landingTopicEditForm.showDescription,
+      showBreadcrumb: landingTopicEditForm.showBreadcrumb,
+      showActionButton: landingTopicEditForm.showActionButton,
+      actionButtonLabel: landingTopicEditForm.actionButtonLabel.trim() || "Open Topic",
+      actionButtonUrl: landingTopicEditForm.actionButtonUrl.trim(),
       isPublished: landingTopicEditForm.isPublished
     };
 
@@ -1769,11 +1790,18 @@ export default function AdminPage() {
       await createLandingTopic({
         title: seed.title,
         slug: seed.slug,
+        description: "",
         html: seed.html,
         css: seed.css,
         js: seed.js,
         showHeader: true,
         showFooter: true,
+        showTitle: false,
+        showDescription: false,
+        showBreadcrumb: false,
+        showActionButton: false,
+        actionButtonLabel: "Open Topic",
+        actionButtonUrl: "",
         isPublished: true,
         showOnHome: true
       });
@@ -4116,9 +4144,33 @@ export default function AdminPage() {
                 onChange={(event) => setLandingTopicForm((prev) => ({ ...prev, slug: event.target.value }))}
                 required
               />
+              <textarea
+                rows={3}
+                placeholder="Topic description (optional)"
+                value={landingTopicForm.description}
+                onChange={(event) => setLandingTopicForm((prev) => ({ ...prev, description: event.target.value }))}
+              />
               <label><input type="checkbox" checked={landingTopicForm.showOnHome} onChange={(event) => setLandingTopicForm((prev) => ({ ...prev, showOnHome: event.target.checked }))} /> Show in Home Browse Topics</label>
               <label><input type="checkbox" checked={landingTopicForm.showHeader} onChange={(event) => setLandingTopicForm((prev) => ({ ...prev, showHeader: event.target.checked }))} /> Show header</label>
               <label><input type="checkbox" checked={landingTopicForm.showFooter} onChange={(event) => setLandingTopicForm((prev) => ({ ...prev, showFooter: event.target.checked }))} /> Show footer</label>
+              <label><input type="checkbox" checked={landingTopicForm.showTitle} onChange={(event) => setLandingTopicForm((prev) => ({ ...prev, showTitle: event.target.checked }))} /> Show title</label>
+              <label><input type="checkbox" checked={landingTopicForm.showDescription} onChange={(event) => setLandingTopicForm((prev) => ({ ...prev, showDescription: event.target.checked }))} /> Show description</label>
+              <label><input type="checkbox" checked={landingTopicForm.showBreadcrumb} onChange={(event) => setLandingTopicForm((prev) => ({ ...prev, showBreadcrumb: event.target.checked }))} /> Show breadcrumb</label>
+              <label><input type="checkbox" checked={landingTopicForm.showActionButton} onChange={(event) => setLandingTopicForm((prev) => ({ ...prev, showActionButton: event.target.checked }))} /> Show button</label>
+              {landingTopicForm.showActionButton ? (
+                <>
+                  <input
+                    placeholder="Button label"
+                    value={landingTopicForm.actionButtonLabel}
+                    onChange={(event) => setLandingTopicForm((prev) => ({ ...prev, actionButtonLabel: event.target.value }))}
+                  />
+                  <input
+                    placeholder="Button redirect URL (optional)"
+                    value={landingTopicForm.actionButtonUrl}
+                    onChange={(event) => setLandingTopicForm((prev) => ({ ...prev, actionButtonUrl: event.target.value }))}
+                  />
+                </>
+              ) : null}
               <label><input type="checkbox" checked={landingTopicForm.isPublished} onChange={(event) => setLandingTopicForm((prev) => ({ ...prev, isPublished: event.target.checked }))} /> Publish landing topic</label>
               <DesignStudio
                 title="Landing Topic Design Studio"
@@ -4142,6 +4194,7 @@ export default function AdminPage() {
                     <strong>{item.title}</strong>
                     <p className="muted">/topic/{item.slug} | {item.isPublished ? "published" : "draft"}</p>
                     <p className="muted">Home: {item.showOnHome !== false ? "show" : "hide"} | Header: {item.showHeader ? "show" : "hide"} | Footer: {item.showFooter ? "show" : "hide"}</p>
+                    <p className="muted">Title: {item.showTitle ? "show" : "hide"} | Description: {item.showDescription ? "show" : "hide"} | Breadcrumb: {item.showBreadcrumb ? "show" : "hide"} | Button: {item.showActionButton ? "show" : "hide"}</p>
                     <div className="form-actions">
                       <a className="btn btn-outline" href={`${siteOrigin}/topic/${item.slug}`} target="_blank" rel="noreferrer">Open</a>
                       <button
@@ -4152,12 +4205,19 @@ export default function AdminPage() {
                           setLandingTopicEditForm({
                             title: item.title,
                             slug: item.slug,
+                            description: item.description ?? "",
                             html: item.html,
                             css: item.css,
                             js: item.js,
                             showOnHome: item.showOnHome !== false,
                             showHeader: item.showHeader,
                             showFooter: item.showFooter,
+                            showTitle: item.showTitle === true,
+                            showDescription: item.showDescription === true,
+                            showBreadcrumb: item.showBreadcrumb === true,
+                            showActionButton: item.showActionButton === true,
+                            actionButtonLabel: item.actionButtonLabel || "Open Topic",
+                            actionButtonUrl: item.actionButtonUrl || "",
                             isPublished: item.isPublished
                           });
                           setLandingTopicEditModalOpen(true);
@@ -4318,9 +4378,33 @@ export default function AdminPage() {
                     onChange={(event) => setLandingTopicEditForm((prev) => ({ ...prev, slug: event.target.value }))}
                     required
                   />
+                  <textarea
+                    rows={3}
+                    placeholder="Topic description (optional)"
+                    value={landingTopicEditForm.description}
+                    onChange={(event) => setLandingTopicEditForm((prev) => ({ ...prev, description: event.target.value }))}
+                  />
                   <label><input type="checkbox" checked={landingTopicEditForm.showOnHome} onChange={(event) => setLandingTopicEditForm((prev) => ({ ...prev, showOnHome: event.target.checked }))} /> Show in Home Browse Topics</label>
                   <label><input type="checkbox" checked={landingTopicEditForm.showHeader} onChange={(event) => setLandingTopicEditForm((prev) => ({ ...prev, showHeader: event.target.checked }))} /> Show header</label>
                   <label><input type="checkbox" checked={landingTopicEditForm.showFooter} onChange={(event) => setLandingTopicEditForm((prev) => ({ ...prev, showFooter: event.target.checked }))} /> Show footer</label>
+                  <label><input type="checkbox" checked={landingTopicEditForm.showTitle} onChange={(event) => setLandingTopicEditForm((prev) => ({ ...prev, showTitle: event.target.checked }))} /> Show title</label>
+                  <label><input type="checkbox" checked={landingTopicEditForm.showDescription} onChange={(event) => setLandingTopicEditForm((prev) => ({ ...prev, showDescription: event.target.checked }))} /> Show description</label>
+                  <label><input type="checkbox" checked={landingTopicEditForm.showBreadcrumb} onChange={(event) => setLandingTopicEditForm((prev) => ({ ...prev, showBreadcrumb: event.target.checked }))} /> Show breadcrumb</label>
+                  <label><input type="checkbox" checked={landingTopicEditForm.showActionButton} onChange={(event) => setLandingTopicEditForm((prev) => ({ ...prev, showActionButton: event.target.checked }))} /> Show button</label>
+                  {landingTopicEditForm.showActionButton ? (
+                    <>
+                      <input
+                        placeholder="Button label"
+                        value={landingTopicEditForm.actionButtonLabel}
+                        onChange={(event) => setLandingTopicEditForm((prev) => ({ ...prev, actionButtonLabel: event.target.value }))}
+                      />
+                      <input
+                        placeholder="Button redirect URL (optional)"
+                        value={landingTopicEditForm.actionButtonUrl}
+                        onChange={(event) => setLandingTopicEditForm((prev) => ({ ...prev, actionButtonUrl: event.target.value }))}
+                      />
+                    </>
+                  ) : null}
                   <label><input type="checkbox" checked={landingTopicEditForm.isPublished} onChange={(event) => setLandingTopicEditForm((prev) => ({ ...prev, isPublished: event.target.checked }))} /> Publish landing topic</label>
                   <DesignStudio
                     title="Landing Topic Design Studio"
@@ -4410,6 +4494,15 @@ export default function AdminPage() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
 
 
 

@@ -436,7 +436,6 @@ type AdminTabKey = "general" | "category" | "topics" | "pages" | "seo" | "learni
 const adminTabs: { key: AdminTabKey; label: string }[] = [
   { key: "general", label: "General" },
   { key: "seo", label: "SEO & Settings" },
-  { key: "category", label: "Categories" },
   { key: "topics", label: "Topics" },
   { key: "pages", label: "Pages" },
   { key: "learning", label: "Learning" },
@@ -2374,161 +2373,6 @@ export default function AdminPage() {
             </div>
           </section>
 
-          <section className="admin-section admin-card" hidden={!isTabActive("general")}>
-            <h3>Hero Slider Media (Image)</h3>
-            <p className="muted">Recommended size: images 1600x900 (16:9).</p>
-            <form className="form-grid" onSubmit={handleHeroDraftRowsSubmit}>
-              <div className="form-actions">
-                <button className="btn btn-outline" type="button" onClick={addHeroDraftRow}>+ Add Slide</button>
-              </div>
-              {heroDraftRows.map((row, index) => (
-                <div className="notice" key={row.id}>
-                  <strong>Slide {index + 1}</strong>
-                  <div className="form-grid" style={{ marginTop: "0.55rem" }}>
-                    <input value="Image slide" disabled />
-                    <input
-                      placeholder="Slide title"
-                      value={row.title}
-                      onChange={(event) => updateHeroDraftRow(row.id, { title: event.target.value })}
-                    />
-                    <input
-                      placeholder="Media URL"
-                      value={row.source}
-                      onChange={(event) => updateHeroDraftRow(row.id, { source: event.target.value })}
-                    />
-                    <input
-                      placeholder="Redirect link (optional)"
-                      value={row.redirectUrl}
-                      onChange={(event) => updateHeroDraftRow(row.id, { redirectUrl: event.target.value })}
-                    />
-                    <input type="file" accept="image/*" onChange={(event) => void handleHeroDraftFileUpload(row.id, event)} />
-                  </div>
-                  <div className="form-actions" style={{ marginTop: "0.6rem" }}>
-                    <button className="btn btn-outline" type="button" onClick={() => removeHeroDraftRow(row.id)}>
-                      Remove Row
-                    </button>
-                  </div>
-                </div>
-              ))}
-              <div className="form-actions">
-                <button className="btn btn-primary" type="submit">Create Slides</button>
-              </div>
-            </form>
-
-            <form className="form-grid" onSubmit={handleHeroMediaSubmit}>
-              <input value="Image slide" disabled />
-              <input
-                placeholder="Slide title"
-                value={heroForm.title}
-                onChange={(event) => setHeroForm((prev) => ({ ...prev, title: event.target.value }))}
-                required
-              />
-              <input
-                placeholder="Media URL"
-                value={heroForm.source}
-                onChange={(event) => setHeroForm((prev) => ({ ...prev, source: event.target.value }))}
-                required
-              />
-              <input
-                placeholder="Redirect link (optional)"
-                value={heroForm.redirectUrl}
-                onChange={(event) => setHeroForm((prev) => ({ ...prev, redirectUrl: event.target.value }))}
-              />
-              <input type="file" accept="image/*" onChange={handleHeroMediaFileUpload} />
-              <textarea
-                rows={3}
-                placeholder="Bulk redirect links (optional, one link per line in upload order)"
-                value={heroBulkRedirectLinks}
-                onChange={(event) => setHeroBulkRedirectLinks(event.target.value)}
-              />
-              <input type="file" accept="image/*" multiple onChange={handleHeroMediaMultiUpload} />
-              <input
-                type="number"
-                min={0}
-                placeholder="Order"
-                value={heroForm.order}
-                onChange={(event) => setHeroForm((prev) => ({ ...prev, order: event.target.value }))}
-              />
-              <label>
-                <input
-                  type="checkbox"
-                  checked={heroForm.enabled}
-                  onChange={(event) => setHeroForm((prev) => ({ ...prev, enabled: event.target.checked }))}
-                />
-                Enabled
-              </label>
-              <div className="form-actions">
-                <button className="btn btn-primary" type="submit">
-                  {heroEditingId ? "Update Media" : "Add Media"}
-                </button>
-                {heroEditingId ? (
-                  <button
-                    className="btn btn-outline"
-                    type="button"
-                    onClick={() => {
-                      setHeroEditingId("");
-                      setHeroForm({ section: "image", title: "", source: "", redirectUrl: "", order: "1", enabled: true });
-                    }}
-                  >
-                    Cancel Edit
-                  </button>
-                ) : null}
-              </div>
-            </form>
-
-            <div className="table-like">
-              {heroMedia.filter((item) => item.section === "image").length ? ( heroMedia.filter((item) => item.section === "image").map((item) => (
-                  <div className="notice" key={item.id}>
-                    <strong>{item.title}</strong>
-                    <p className="muted">
-                      order {item.order} | {item.enabled ? "enabled" : "disabled"}
-                    </p>
-                    <p className="muted">{item.source}</p>
-                    <p className="muted">Redirect: {item.redirectUrl || "none"}</p>
-                    <div className="form-actions">
-                      <button
-                        className="btn btn-outline"
-                        type="button"
-                        onClick={() => {
-                          setHeroEditingId(item.id);
-                          setHeroForm({
-                            section: "image",
-                            title: item.title,
-                            source: item.source,
-                            redirectUrl: item.redirectUrl ?? "",
-                            order: String(item.order),
-                            enabled: item.enabled
-                          });
-                        }}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        className="btn btn-outline"
-                        type="button"
-                        onClick={() => void deleteHeroMedia(item.id).then(refreshAll)}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <p className="muted">No hero media configured yet.</p>
-              )}
-            </div>
-          </section>
-
-
-
-
-
-
-
-
-
-
-
           <section className="admin-section admin-card" hidden={!isTabActive("seo")}>
             <h3>404 Redirect Settings</h3>
             <p className="muted">Configure where users should go from invalid URLs.</p>
@@ -2702,31 +2546,6 @@ export default function AdminPage() {
               ) : (
                 <p className="muted">No navigation links configured yet.</p>
               )}
-            </div>
-          </section>
-
-          <section className="admin-section admin-card" hidden={!isTabActive("category")}>
-            <h3>Category Management</h3>
-            <form className="form-grid" onSubmit={handleCategorySubmit}>
-              <input placeholder="Category name" value={categoryForm.name} onChange={(event) => setCategoryForm((prev) => ({ ...prev, name: event.target.value }))} required />
-              <input placeholder="Category slug" value={categoryForm.slug} onChange={(event) => setCategoryForm((prev) => ({ ...prev, slug: event.target.value }))} required />
-              <textarea rows={2} placeholder="Description" value={categoryForm.description} onChange={(event) => setCategoryForm((prev) => ({ ...prev, description: event.target.value }))} required />
-              <div className="form-actions">
-                <button className="btn btn-primary" type="submit">{categoryEditingId ? "Update Category" : "Add Category"}</button>
-                {categoryEditingId ? <button className="btn btn-outline" type="button" onClick={() => { setCategoryEditingId(""); setCategoryForm({ name: "", slug: "", description: "" }); }}>Cancel Edit</button> : null}
-              </div>
-            </form>
-            <div className="table-like">
-              {categories.map((item) => (
-                <div className="notice" key={item.id}>
-                  <strong>{item.name}</strong> <span className="muted">({item.slug})</span>
-                  <p className="muted">{item.description}</p>
-                  <div className="form-actions">
-                    <button className="btn btn-outline" type="button" onClick={() => { setCategoryEditingId(item.id); setCategoryForm({ name: item.name, slug: item.slug, description: item.description }); }}>Edit</button>
-                    <button className="btn btn-outline" type="button" onClick={() => void deleteCategory(item.id).then(refreshAll)}>Delete</button>
-                  </div>
-                </div>
-              ))}
             </div>
           </section>
 
@@ -3831,6 +3650,8 @@ export default function AdminPage() {
     </div>
   );
 }
+
+
 
 
 

@@ -303,7 +303,10 @@ export default function CommunityPageClient() {
                     return (
                       <article className="notice community-card-pro" key={question.id}>
                         <div className="community-card-head">
-                          <h3>{question.question}</h3>
+                          <div className="community-question-block">
+                            <p className="community-question-label">Question</p>
+                            <h3>{question.question}</h3>
+                          </div>
                           <span className="community-category-pill">
                             {categoryNameById[question.categoryId] ?? "General"}
                           </span>
@@ -320,6 +323,7 @@ export default function CommunityPageClient() {
                         </div>
 
                         <div className="community-answers">
+                          <p className="community-answers-label">Answers ({questionAnswers.length})</p>
                           {questionAnswers.length ? (
                             questionAnswers.map((answer) => (
                               <div className="community-answer" key={answer.id}>
@@ -438,4 +442,5 @@ export default function CommunityPageClient() {
     </div>
   );
 }
+
 

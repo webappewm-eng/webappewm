@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DesignFrame } from "@/components/design/DesignFrame";
 import { Footer } from "@/components/layout/Footer";
@@ -46,26 +45,12 @@ export default async function TopicPage({ params }: TopicPageProps) {
 
   const showHeader = topic.showHeader;
   const showFooter = topic.showFooter;
-  const showBreadcrumb = showHeader || showFooter;
 
   return (
-    <div className="app-shell">
+    <div className={showHeader || showFooter ? "app-shell" : "topic-standalone-shell"}>
       {showHeader ? <Header /> : null}
-      <main className={`page-main ${showHeader ? "" : "page-main-no-nav"}`}>
-        <div className="page-wrap">
-          {showBreadcrumb ? (
-            <p className="breadcrumb">
-              <Link href="/">Home</Link> / Topic
-            </p>
-          ) : null}
-          <section className="post-content">
-            <div className="post-content-inner">
-              <h1 className="h2">{topic.title}</h1>
-              <p className="muted">Updated {new Date(topic.updatedAt).toLocaleDateString()}</p>
-              <DesignFrame title={topic.title} html={topic.html} css={topic.css} js={topic.js} minHeight={640} />
-            </div>
-          </section>
-        </div>
+      <main className={showHeader ? "page-main topic-design-main" : "topic-design-main topic-design-main-no-nav"}>
+        <DesignFrame title={topic.title} html={topic.html} css={topic.css} js={topic.js} minHeight={showHeader || showFooter ? 760 : 920} borderless fitContent />
       </main>
       {showFooter ? <Footer /> : null}
     </div>

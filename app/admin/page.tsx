@@ -62,6 +62,7 @@ import {
   getSubtopics,
   getThirdPartyScripts,
   getVisitorAnalytics,
+  getVisitorCountryAnalyticsByDate,
   getWebinars,
   getWebinarRegistrations,
   getCourses,
@@ -214,6 +215,7 @@ const emptyLandingTopicForm = {
   html: "",
   css: "",
   js: "",
+  showOnHome: true,
   showHeader: true,
   showFooter: true,
   isPublished: true
@@ -574,6 +576,9 @@ export default function AdminPage() {
     byDate: [],
     byCountry: []
   });
+  const [selectedVisitorDate, setSelectedVisitorDate] = useState("");
+  const [visitorCountryBySelectedDate, setVisitorCountryBySelectedDate] = useState<Array<{ country: string; count: number }>>([]);
+  const [visitorDateFilterLoading, setVisitorDateFilterLoading] = useState(false);
 
   const [settings, setSettings] = useState<SiteSettings>({
     id: "global",
@@ -618,6 +623,8 @@ export default function AdminPage() {
 
   const [landingTopicForm, setLandingTopicForm] = useState(emptyLandingTopicForm);
   const [landingTopicEditingId, setLandingTopicEditingId] = useState("");
+  const [landingTopicEditForm, setLandingTopicEditForm] = useState(emptyLandingTopicForm);
+  const [landingTopicEditModalOpen, setLandingTopicEditModalOpen] = useState(false);
 
   const [scriptForm, setScriptForm] = useState({ name: "", src: "", inlineCode: "", location: "body" as "head" | "body" });
   const [heroMedia, setHeroMedia] = useState<HeroMediaItem[]>([]);
@@ -630,8 +637,8 @@ export default function AdminPage() {
     enabled: true
   });
   const [heroDraftRows, setHeroDraftRows] = useState<HeroDraftRow[]>([createHeroDraftRow("image")]);
-  const [heroBulkRedirectLinks, setHeroBulkRedirectLinks] = useState("");
   const [heroEditingId, setHeroEditingId] = useState("");
+  const [heroEditModalOpen, setHeroEditModalOpen] = useState(false);
 
   const [appearanceForm, setAppearanceForm] = useState({
     themeMode: "light" as SiteSettings["themeMode"],
@@ -703,6 +710,57 @@ export default function AdminPage() {
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiBusy, setAiBusy] = useState(false);
   const [activeTab, setActiveTab] = useState<AdminTabKey>("general");
+
+  const inlineEditModalOpen = Boolean(
+    socialEditingId ||
+      communityCategoryEditingId ||
+      navEditingId ||
+      subtopicEditingId ||
+      postEditingId ||
+      webinarEditingId ||
+      courseTypeEditingId ||
+      courseAdEditingId ||
+      courseEditingId ||
+      templateEditingId ||
+      pageEditingId
+  );
+
+  function closeInlineEditPopups() {
+    setCategoryEditingId("");
+    setSubtopicEditingId("");
+    setPostEditingId("");
+    setPageEditingId("");
+    setNavEditingId("");
+    setCommunityCategoryEditingId("");
+    setSocialEditingId("");
+    setWebinarEditingId("");
+    setCourseEditingId("");
+    setCourseTypeEditingId("");
+    setCourseAdEditingId("");
+    setTemplateEditingId("");
+
+    setSocialForm(emptySocialForm);
+    setCommunityCategoryForm(emptyCommunityCategoryForm);
+    setNavForm({
+      label: "",
+      href: "",
+      location: "header",
+      order: "1",
+      parentId: "",
+      enabled: true,
+      openInNewTab: false
+    });
+    setSubtopicForm({ categoryId: categories[0]?.id ?? "", name: "", slug: "", showOnHome: true });
+    setPostForm(emptyPostForm);
+    setWebinarForm(emptyWebinarForm);
+    setCourseTypeForm(emptyCourseTypeForm);
+    setCourseAdForm(emptyCourseAdForm);
+    setCourseForm(emptyCourseForm);
+    setCourseSectionDrafts([createCourseSectionDraft()]);
+    setCourseQuestionDrafts([createCourseQuestionDraft()]);
+    setTemplateForm(emptyTemplateForm);
+    setPageForm(emptyPageForm);
+  }
 
   function isTabActive(tab: AdminTabKey): boolean {
     return activeTab === tab;
@@ -795,6 +853,18 @@ export default function AdminPage() {
     setSocialLinks(nextSocialLinks);
     setVisitorAnalytics(nextVisitorAnalytics);
 
+    setSelectedVisitorDate((prev) => {
+      if (!prev) {
+        return "";
+      }
+      const stillExists = nextVisitorAnalytics.byDate.some((item) => item.date === prev);
+      if (stillExists) {
+        return prev;
+      }
+      setVisitorCountryBySelectedDate([]);
+      return "";
+    });
+
     setNotFoundForm({
       notFoundRedirectType: nextSettings.notFoundRedirectType,
       notFoundRedirectPath: nextSettings.notFoundRedirectPath,
@@ -872,6 +942,37 @@ export default function AdminPage() {
     }
     setSiteOrigin(window.location.origin);
   }, []);
+
+  useEffect(() => {
+    if (!selectedVisitorDate) {
+      setVisitorCountryBySelectedDate([]);
+      return;
+    }
+
+    let isCancelled = false;
+    setVisitorDateFilterLoading(true);
+
+    void getVisitorCountryAnalyticsByDate(selectedVisitorDate)
+      .then((rows) => {
+        if (!isCancelled) {
+          setVisitorCountryBySelectedDate(rows);
+        }
+      })
+      .catch(() => {
+        if (!isCancelled) {
+          setVisitorCountryBySelectedDate([]);
+        }
+      })
+      .finally(() => {
+        if (!isCancelled) {
+          setVisitorDateFilterLoading(false);
+        }
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [selectedVisitorDate]);
 
   const postTitleById = useMemo(() => {
     const map: Record<string, string> = {};
@@ -1110,6 +1211,7 @@ export default function AdminPage() {
       html: landingTopicForm.html,
       css: landingTopicForm.css,
       js: landingTopicForm.js,
+      showOnHome: landingTopicForm.showOnHome,
       showHeader: landingTopicForm.showHeader,
       showFooter: landingTopicForm.showFooter,
       isPublished: landingTopicForm.isPublished
@@ -1125,18 +1227,49 @@ export default function AdminPage() {
       return;
     }
 
-    if (landingTopicEditingId) {
-      await updateLandingTopic(landingTopicEditingId, payload);
-      setStatus("Landing topic updated.");
-    } else {
-      await createLandingTopic(payload);
-      setStatus("Landing topic created.");
-    }
-
+    await createLandingTopic(payload);
     setLandingTopicForm(emptyLandingTopicForm);
-    setLandingTopicEditingId("");
+    setStatus("Landing topic created.");
     await refreshAll();
   }
+
+  async function handleLandingTopicEditSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!landingTopicEditingId) {
+      setStatus("Select a landing topic to edit first.");
+      return;
+    }
+
+    const payload = {
+      title: landingTopicEditForm.title.trim(),
+      slug: slugify(landingTopicEditForm.slug || landingTopicEditForm.title),
+      html: landingTopicEditForm.html,
+      css: landingTopicEditForm.css,
+      js: landingTopicEditForm.js,
+      showOnHome: landingTopicEditForm.showOnHome,
+      showHeader: landingTopicEditForm.showHeader,
+      showFooter: landingTopicEditForm.showFooter,
+      isPublished: landingTopicEditForm.isPublished
+    };
+
+    if (!payload.title || !payload.slug) {
+      setStatus("Landing topic title and slug are required.");
+      return;
+    }
+
+    if (!payload.html.trim() && !payload.css.trim() && !payload.js.trim()) {
+      setStatus("Add HTML/CSS/JS to update a landing topic.");
+      return;
+    }
+
+    await updateLandingTopic(landingTopicEditingId, payload);
+    setLandingTopicEditingId("");
+    setLandingTopicEditModalOpen(false);
+    setStatus("Landing topic updated.");
+    await refreshAll();
+  }
+
   async function handleScriptSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -1289,54 +1422,6 @@ export default function AdminPage() {
     setStatus(`${preparedRows.length} hero media item(s) created.`);
     await refreshAll();
   }
-  async function handleHeroMediaMultiUpload(event: ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(event.target.files ?? []);
-    if (!files.length) {
-      return;
-    }
-
-    setUploadingImage(true);
-    setUploadStatus("");
-
-    try {
-      const uploads = await Promise.all(
-        files.map(async (file) => {
-          const url = await uploadSiteAsset(file);
-          return { file, url };
-        })
-      );
-
-      const redirectLinks = heroBulkRedirectLinks
-        .split(/\r?\n/)
-        .map((item) => item.trim())
-        .filter(Boolean);
-      const currentMaxOrder = heroMedia.filter((item) => item.section === "image").reduce((max, item) => Math.max(max, item.order), 0);
-
-      await Promise.all(
-        uploads.map(({ file, url }, index) => {
-          const nameWithoutExtension = file.name.replace(/\.[^/.]+$/, "").trim();
-          return createHeroMedia({
-            section: "image",
-            title: nameWithoutExtension || `Hero media ${currentMaxOrder + index + 1}`,
-            source: url,
-            redirectUrl: redirectLinks[index] ?? "",
-            order: currentMaxOrder + index + 1,
-            enabled: true
-          });
-        })
-      );
-
-      setHeroBulkRedirectLinks("");
-      setStatus(`${uploads.length} hero media item(s) created successfully.`);
-      setUploadStatus(`${uploads.length} file(s) uploaded and added to slider.`);
-      await refreshAll();
-    } catch {
-      setUploadStatus("Bulk hero media upload failed.");
-    } finally {
-      setUploadingImage(false);
-      event.target.value = "";
-    }
-  }
   async function handleHeroMediaSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -1354,16 +1439,17 @@ export default function AdminPage() {
       return;
     }
 
-    if (heroEditingId) {
-      await updateHeroMedia(heroEditingId, payload);
-      setStatus("Hero media updated.");
-    } else {
-      await createHeroMedia(payload);
-      setStatus("Hero media created.");
+    if (!heroEditingId) {
+      setStatus("Select a hero media item to edit first.");
+      return;
     }
+
+    await updateHeroMedia(heroEditingId, payload);
+    setStatus("Hero media updated.");
 
     setHeroForm({ section: "image", title: "", source: "", redirectUrl: "", order: "1", enabled: true });
     setHeroEditingId("");
+    setHeroEditModalOpen(false);
     await refreshAll();
   }
 
@@ -1688,7 +1774,8 @@ export default function AdminPage() {
         js: seed.js,
         showHeader: true,
         showFooter: true,
-        isPublished: true
+        isPublished: true,
+        showOnHome: true
       });
       createdTopicPages += 1;
     }
@@ -2110,10 +2197,6 @@ export default function AdminPage() {
       return;
     }
 
-    if (!questions.length) {
-      setStatus("Add at least one test question.");
-      return;
-    }
 
     const payload = {
       title: courseForm.title.trim(),
@@ -2282,28 +2365,48 @@ export default function AdminPage() {
           <section className="admin-section admin-card" hidden={!isTabActive("general")}>
             <h3>Visitor Analytics</h3>
             <div className="notice"><strong>Total visitors:</strong> {visitorAnalytics.totalVisitors}</div>
-            <div className="table-like">
-              <div className="notice">
-                <strong>Date-wise visitors</strong>
-                {visitorAnalytics.byDate.length ? (
-                  visitorAnalytics.byDate.map((item) => (
-                    <p className="muted" key={`visitor-date-${item.date}`}>{item.date}: {item.count}</p>
-                  ))
-                ) : (
-                  <p className="muted">No visitor data yet.</p>
-                )}
-              </div>
-              <div className="notice">
-                <strong>Country-wise visitors</strong>
-                {visitorAnalytics.byCountry.length ? (
-                  visitorAnalytics.byCountry.map((item) => (
-                    <p className="muted" key={`visitor-country-${item.country}`}>{item.country}: {item.count}</p>
-                  ))
-                ) : (
-                  <p className="muted">No visitor data yet.</p>
-                )}
-              </div>
+            <div className="form-grid" style={{ marginTop: "0.7rem" }}>
+              <label htmlFor="visitor-date-filter">Select date to load date-wise and country-wise breakdown</label>
+              <select
+                id="visitor-date-filter"
+                value={selectedVisitorDate}
+                onChange={(event) => setSelectedVisitorDate(event.target.value)}
+              >
+                <option value="">Select a date</option>
+                {visitorAnalytics.byDate.map((item) => (
+                  <option key={item.date} value={item.date}>
+                    {item.date} ({item.count})
+                  </option>
+                ))}
+              </select>
             </div>
+
+            {selectedVisitorDate ? (
+              <div className="table-like" style={{ marginTop: "0.7rem" }}>
+                <div className="notice">
+                  <strong>Date-wise visitors</strong>
+                  <p className="muted">
+                    {selectedVisitorDate}: {visitorAnalytics.byDate.find((item) => item.date === selectedVisitorDate)?.count ?? 0}
+                  </p>
+                </div>
+                <div className="notice">
+                  <strong>Country-wise visitors</strong>
+                  {visitorDateFilterLoading ? (
+                    <p className="muted">Loading country data...</p>
+                  ) : visitorCountryBySelectedDate.length ? (
+                    visitorCountryBySelectedDate.map((item) => (
+                      <p className="muted" key={`visitor-country-${selectedVisitorDate}-${item.country}`}>
+                        {item.country}: {item.count}
+                      </p>
+                    ))
+                  ) : (
+                    <p className="muted">No country data for this date.</p>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <p className="muted" style={{ marginTop: "0.7rem" }}>Select a date to view detailed visitor analytics.</p>
+            )}
           </section>
 
           <section className="admin-section admin-card" hidden={!isTabActive("general")}>
@@ -2314,7 +2417,7 @@ export default function AdminPage() {
                 Add Missing Default Social Platforms
               </button>
             </div>
-            <form className="form-grid" onSubmit={handleSocialLinkSubmit}>
+            <form className={`form-grid ${socialEditingId ? "admin-edit-popup-form" : ""}`} onSubmit={handleSocialLinkSubmit}>
               <input
                 placeholder="Platform (youtube, instagram, x, linkedin...)"
                 value={socialForm.platform}
@@ -2444,7 +2547,7 @@ export default function AdminPage() {
                 </button>
               </div>
             </div>
-            <form className="form-grid" onSubmit={handleCommunityCategorySubmit}>
+            <form className={`form-grid ${communityCategoryEditingId ? "admin-edit-popup-form" : ""}`} onSubmit={handleCommunityCategorySubmit}>
               <input
                 placeholder="Category name"
                 value={communityCategoryForm.name}
@@ -2811,67 +2914,7 @@ export default function AdminPage() {
                 <button className="btn btn-primary" type="submit">Create Slides</button>
               </div>
             </form>
-
-            <form className="form-grid" onSubmit={handleHeroMediaSubmit}>
-              <input value="Image slide" disabled />
-              <input
-                placeholder="Slide title"
-                value={heroForm.title}
-                onChange={(event) => setHeroForm((prev) => ({ ...prev, title: event.target.value }))}
-                required
-              />
-              <input
-                placeholder="Media URL"
-                value={heroForm.source}
-                onChange={(event) => setHeroForm((prev) => ({ ...prev, source: event.target.value }))}
-                required
-              />
-              <input
-                placeholder="Redirect link (optional)"
-                value={heroForm.redirectUrl}
-                onChange={(event) => setHeroForm((prev) => ({ ...prev, redirectUrl: event.target.value }))}
-              />
-              <input type="file" accept="image/*" onChange={handleHeroMediaFileUpload} />
-              <textarea
-                rows={3}
-                placeholder="Bulk redirect links (optional, one link per line in upload order)"
-                value={heroBulkRedirectLinks}
-                onChange={(event) => setHeroBulkRedirectLinks(event.target.value)}
-              />
-              <input type="file" accept="image/*" multiple onChange={handleHeroMediaMultiUpload} />
-              <input
-                type="number"
-                min={0}
-                placeholder="Order"
-                value={heroForm.order}
-                onChange={(event) => setHeroForm((prev) => ({ ...prev, order: event.target.value }))}
-              />
-              <label>
-                <input
-                  type="checkbox"
-                  checked={heroForm.enabled}
-                  onChange={(event) => setHeroForm((prev) => ({ ...prev, enabled: event.target.checked }))}
-                />
-                Enabled
-              </label>
-              <div className="form-actions">
-                <button className="btn btn-primary" type="submit">
-                  {heroEditingId ? "Update Media" : "Add Media"}
-                </button>
-                {heroEditingId ? (
-                  <button
-                    className="btn btn-outline"
-                    type="button"
-                    onClick={() => {
-                      setHeroEditingId("");
-                      setHeroForm({ section: "image", title: "", source: "", redirectUrl: "", order: "1", enabled: true });
-                    }}
-                  >
-                    Cancel Edit
-                  </button>
-                ) : null}
-              </div>
-            </form>
+            <p className="muted" style={{ marginTop: "0.75rem" }}>Use + Add Slide and Create Slides. Edit opens in popup to avoid duplicate forms.</p>
 
             <div className="table-like">
               {heroMedia.filter((item) => item.section === "image").length ? ( heroMedia.filter((item) => item.section === "image").map((item) => (
@@ -2896,6 +2939,7 @@ export default function AdminPage() {
                             order: String(item.order),
                             enabled: item.enabled
                           });
+                          setHeroEditModalOpen(true);
                         }}
                       >
                         Edit
@@ -2965,7 +3009,7 @@ export default function AdminPage() {
           <section className="admin-section admin-card" hidden={!isTabActive("general")}>
             <h3>Menu and Footer Links</h3>
             <p className="muted">Create links for header menu and footer pages list.</p>
-            <form className="form-grid" onSubmit={handleNavigationLinkSubmit}>
+            <form className={`form-grid ${navEditingId ? "admin-edit-popup-form" : ""}`} onSubmit={handleNavigationLinkSubmit}>
               <input
                 placeholder="Link label"
                 value={navForm.label}
@@ -3095,7 +3139,7 @@ export default function AdminPage() {
 
           <section className="admin-section admin-card" hidden={!isTabActive("topics")}>
             <h3>Subtopic Management</h3>
-            <form className="form-grid" onSubmit={handleSubtopicSubmit}>
+            <form className={`form-grid ${subtopicEditingId ? "admin-edit-popup-form" : ""}`} onSubmit={handleSubtopicSubmit}>
               <select value={subtopicForm.categoryId} onChange={(event) => setSubtopicForm((prev) => ({ ...prev, categoryId: event.target.value }))}>
                 {categories.map((category) => (
                   <option value={category.id} key={category.id}>{category.name}</option>
@@ -3141,7 +3185,7 @@ export default function AdminPage() {
                 </button>
               </div>
             </div>
-            <form className="form-grid" onSubmit={handlePostSubmit}>
+            <form className={`form-grid ${postEditingId ? "admin-edit-popup-form admin-edit-popup-form-wide" : ""}`} onSubmit={handlePostSubmit}>
               <input placeholder="Title" value={postForm.title} onChange={(event) => setPostForm((prev) => ({ ...prev, title: event.target.value }))} required />
               <input placeholder="Slug" value={postForm.slug} onChange={(event) => setPostForm((prev) => ({ ...prev, slug: event.target.value }))} required />
               <textarea rows={2} placeholder="Excerpt" value={postForm.excerpt} onChange={(event) => setPostForm((prev) => ({ ...prev, excerpt: event.target.value }))} required />
@@ -3230,7 +3274,7 @@ export default function AdminPage() {
           <section className="admin-section admin-card" hidden={!isTabActive("learning")}>
             <h3>Webinar Management</h3>
             <p className="muted">Create webinars, generate shortcode automatically, and track registrations.</p>
-            <form className="form-grid" onSubmit={handleWebinarSubmit}>
+            <form className={`form-grid ${webinarEditingId ? "admin-edit-popup-form" : ""}`} onSubmit={handleWebinarSubmit}>
               <input
                 placeholder="Webinar title"
                 value={webinarForm.title}
@@ -3372,7 +3416,7 @@ export default function AdminPage() {
           </section><section className="admin-section admin-card" hidden={!isTabActive("learning")}>
             <h3>Course Types</h3>
             <p className="muted">Default types are Basics, Free Learning, Paid Course. You can add more types anytime.</p>
-            <form className="form-grid" onSubmit={handleCourseTypeSubmit}>
+            <form className={`form-grid ${courseTypeEditingId ? "admin-edit-popup-form" : ""}`} onSubmit={handleCourseTypeSubmit}>
               <input
                 placeholder="Course type name"
                 value={courseTypeForm.name}
@@ -3455,7 +3499,7 @@ export default function AdminPage() {
           <section className="admin-section admin-card" hidden={!isTabActive("learning")}>
             <h3>Course Ads</h3>
             <p className="muted">Create ads (image/video/code) and attach them per course.</p>
-            <form className="form-grid" onSubmit={handleCourseAdSubmit}>
+            <form className={`form-grid ${courseAdEditingId ? "admin-edit-popup-form admin-edit-popup-form-wide" : ""}`} onSubmit={handleCourseAdSubmit}>
               <input
                 placeholder="Ad name"
                 value={courseAdForm.name}
@@ -3581,7 +3625,7 @@ export default function AdminPage() {
                 Seed Demo Data (Topics + Community + Courses)
               </button>
             </div>
-            <form className="form-grid" onSubmit={handleCourseSubmit}>
+            <form className={`form-grid ${courseEditingId ? "admin-edit-popup-form admin-edit-popup-form-wide" : ""}`} onSubmit={handleCourseSubmit}>
               <input
                 placeholder="Course title"
                 value={courseForm.title}
@@ -3683,10 +3727,9 @@ export default function AdminPage() {
               </div>
               <textarea
                 rows={5}
-                placeholder="Question||Option A|Option B||0"
+                placeholder="Question||Option A|Option B||0 (optional)"
                 value={courseForm.questionsInput}
                 onChange={(event) => setCourseForm((prev) => ({ ...prev, questionsInput: event.target.value }))}
-                required
               />
 
               <div className="notice">
@@ -3853,7 +3896,7 @@ export default function AdminPage() {
 
           <section className="admin-section admin-card" hidden={!isTabActive("learning")}>
             <h3>Certificate Templates and Signature</h3>
-            <form className="form-grid" onSubmit={handleTemplateSubmit}>
+            <form className={`form-grid ${templateEditingId ? "admin-edit-popup-form" : ""}`} onSubmit={handleTemplateSubmit}>
               <input
                 placeholder="Template name"
                 value={templateForm.name}
@@ -3959,7 +4002,7 @@ export default function AdminPage() {
                 {certificates.length ? (
                   certificates.slice(0, 50).map((item) => (
                     <p className="muted" key={`certificate-${item.id}`}>
-                      {courseTitleById[item.courseId] ?? item.courseId} - {item.userEmail} - {item.certificateNumber} - template {templateNameById[item.templateId] ?? "none"}
+                      {courseTitleById[item.courseId] ?? item.courseId} - {item.userEmail} - {item.certificateNumber} - score {item.score}% - attempts {item.attempts} - template {templateNameById[item.templateId] ?? "none"}
                     </p>
                   ))
                 ) : (
@@ -3994,7 +4037,7 @@ export default function AdminPage() {
 
           <section className="admin-section admin-card" hidden={!isTabActive("pages")}>
             <h3>Custom Page Management</h3>
-            <form className="form-grid" onSubmit={handlePageSubmit}>
+            <form className={`form-grid ${pageEditingId ? "admin-edit-popup-form admin-edit-popup-form-wide" : ""}`} onSubmit={handlePageSubmit}>
               <input placeholder="Page title" value={pageForm.title} onChange={(event) => setPageForm((prev) => ({ ...prev, title: event.target.value }))} required />
               <input placeholder="Page slug" value={pageForm.slug} onChange={(event) => setPageForm((prev) => ({ ...prev, slug: event.target.value }))} required />
               <select
@@ -4073,6 +4116,7 @@ export default function AdminPage() {
                 onChange={(event) => setLandingTopicForm((prev) => ({ ...prev, slug: event.target.value }))}
                 required
               />
+              <label><input type="checkbox" checked={landingTopicForm.showOnHome} onChange={(event) => setLandingTopicForm((prev) => ({ ...prev, showOnHome: event.target.checked }))} /> Show in Home Browse Topics</label>
               <label><input type="checkbox" checked={landingTopicForm.showHeader} onChange={(event) => setLandingTopicForm((prev) => ({ ...prev, showHeader: event.target.checked }))} /> Show header</label>
               <label><input type="checkbox" checked={landingTopicForm.showFooter} onChange={(event) => setLandingTopicForm((prev) => ({ ...prev, showFooter: event.target.checked }))} /> Show footer</label>
               <label><input type="checkbox" checked={landingTopicForm.isPublished} onChange={(event) => setLandingTopicForm((prev) => ({ ...prev, isPublished: event.target.checked }))} /> Publish landing topic</label>
@@ -4087,20 +4131,8 @@ export default function AdminPage() {
               />
               <div className="form-actions">
                 <button className="btn btn-primary" type="submit">
-                  {landingTopicEditingId ? "Update Landing Topic" : "Create Landing Topic"}
+                  Create Landing Topic
                 </button>
-                {landingTopicEditingId ? (
-                  <button
-                    className="btn btn-outline"
-                    type="button"
-                    onClick={() => {
-                      setLandingTopicEditingId("");
-                      setLandingTopicForm(emptyLandingTopicForm);
-                    }}
-                  >
-                    Cancel Edit
-                  </button>
-                ) : null}
               </div>
             </form>
             <div className="table-like">
@@ -4109,7 +4141,7 @@ export default function AdminPage() {
                   <article className="notice" key={`landing-topic-${item.id}`}>
                     <strong>{item.title}</strong>
                     <p className="muted">/topic/{item.slug} | {item.isPublished ? "published" : "draft"}</p>
-                    <p className="muted">Header: {item.showHeader ? "show" : "hide"} | Footer: {item.showFooter ? "show" : "hide"}</p>
+                    <p className="muted">Home: {item.showOnHome !== false ? "show" : "hide"} | Header: {item.showHeader ? "show" : "hide"} | Footer: {item.showFooter ? "show" : "hide"}</p>
                     <div className="form-actions">
                       <a className="btn btn-outline" href={`${siteOrigin}/topic/${item.slug}`} target="_blank" rel="noreferrer">Open</a>
                       <button
@@ -4117,16 +4149,18 @@ export default function AdminPage() {
                         type="button"
                         onClick={() => {
                           setLandingTopicEditingId(item.id);
-                          setLandingTopicForm({
+                          setLandingTopicEditForm({
                             title: item.title,
                             slug: item.slug,
                             html: item.html,
                             css: item.css,
                             js: item.js,
+                            showOnHome: item.showOnHome !== false,
                             showHeader: item.showHeader,
                             showFooter: item.showFooter,
                             isPublished: item.isPublished
                           });
+                          setLandingTopicEditModalOpen(true);
                         }}
                       >
                         Edit
@@ -4264,21 +4298,118 @@ export default function AdminPage() {
             </div>
           </section>
         </div>
-      </main>
+          {inlineEditModalOpen ? <div className="admin-edit-popup-backdrop" onClick={closeInlineEditPopups} /> : null}
+
+                {landingTopicEditModalOpen ? (
+            <div className="modal-backdrop" onClick={() => setLandingTopicEditModalOpen(false)}>
+              <div className="modal" style={{ width: "min(1100px, 96vw)", maxHeight: "92vh", overflowY: "auto" }} onClick={(event) => event.stopPropagation()}>
+                <h3>Edit Landing Topic</h3>
+                <p>Update slug, visibility, and imported design in one popup.</p>
+                <form className="form-grid" onSubmit={handleLandingTopicEditSubmit}>
+                  <input
+                    placeholder="Landing topic title"
+                    value={landingTopicEditForm.title}
+                    onChange={(event) => setLandingTopicEditForm((prev) => ({ ...prev, title: event.target.value }))}
+                    required
+                  />
+                  <input
+                    placeholder="Landing topic slug"
+                    value={landingTopicEditForm.slug}
+                    onChange={(event) => setLandingTopicEditForm((prev) => ({ ...prev, slug: event.target.value }))}
+                    required
+                  />
+                  <label><input type="checkbox" checked={landingTopicEditForm.showOnHome} onChange={(event) => setLandingTopicEditForm((prev) => ({ ...prev, showOnHome: event.target.checked }))} /> Show in Home Browse Topics</label>
+                  <label><input type="checkbox" checked={landingTopicEditForm.showHeader} onChange={(event) => setLandingTopicEditForm((prev) => ({ ...prev, showHeader: event.target.checked }))} /> Show header</label>
+                  <label><input type="checkbox" checked={landingTopicEditForm.showFooter} onChange={(event) => setLandingTopicEditForm((prev) => ({ ...prev, showFooter: event.target.checked }))} /> Show footer</label>
+                  <label><input type="checkbox" checked={landingTopicEditForm.isPublished} onChange={(event) => setLandingTopicEditForm((prev) => ({ ...prev, isPublished: event.target.checked }))} /> Publish landing topic</label>
+                  <DesignStudio
+                    title="Landing Topic Design Studio"
+                    htmlCode={landingTopicEditForm.html}
+                    cssCode={landingTopicEditForm.css}
+                    jsCode={landingTopicEditForm.js}
+                    onHtmlCodeChange={(value) => setLandingTopicEditForm((prev) => ({ ...prev, html: value }))}
+                    onCssCodeChange={(value) => setLandingTopicEditForm((prev) => ({ ...prev, css: value }))}
+                    onJsCodeChange={(value) => setLandingTopicEditForm((prev) => ({ ...prev, js: value }))}
+                  />
+                  <div className="form-actions">
+                    <button className="btn btn-primary" type="submit">Update Landing Topic</button>
+                    <button
+                      className="btn btn-outline"
+                      type="button"
+                      onClick={() => {
+                        setLandingTopicEditingId("");
+                        setLandingTopicEditModalOpen(false);
+                      }}
+                    >
+                      Close
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          ) : null}
+
+          {heroEditModalOpen ? (
+            <div className="modal-backdrop" onClick={() => setHeroEditModalOpen(false)}>
+              <div className="modal" onClick={(event) => event.stopPropagation()}>
+                <h3>Edit Hero Slide</h3>
+                <p>Update title, image URL, redirect link, and enable state.</p>
+                <form className="form-grid" onSubmit={handleHeroMediaSubmit}>
+                  <input
+                    placeholder="Slide title"
+                    value={heroForm.title}
+                    onChange={(event) => setHeroForm((prev) => ({ ...prev, title: event.target.value }))}
+                    required
+                  />
+                  <input
+                    placeholder="Media URL"
+                    value={heroForm.source}
+                    onChange={(event) => setHeroForm((prev) => ({ ...prev, source: event.target.value }))}
+                    required
+                  />
+                  <input
+                    placeholder="Redirect link (optional)"
+                    value={heroForm.redirectUrl}
+                    onChange={(event) => setHeroForm((prev) => ({ ...prev, redirectUrl: event.target.value }))}
+                  />
+                  <input type="file" accept="image/*" onChange={handleHeroMediaFileUpload} />
+                  <input
+                    type="number"
+                    min={0}
+                    placeholder="Order"
+                    value={heroForm.order}
+                    onChange={(event) => setHeroForm((prev) => ({ ...prev, order: event.target.value }))}
+                  />
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={heroForm.enabled}
+                      onChange={(event) => setHeroForm((prev) => ({ ...prev, enabled: event.target.checked }))}
+                    />
+                    Enabled
+                  </label>
+                  <div className="form-actions">
+                    <button className="btn btn-primary" type="submit">Update Media</button>
+                    <button
+                      className="btn btn-outline"
+                      type="button"
+                      onClick={() => {
+                        setHeroEditingId("");
+                        setHeroEditModalOpen(false);
+                      }}
+                    >
+                      Close
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          ) : null}
+        </main>
       <Footer />
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
 
 
 

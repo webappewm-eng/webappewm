@@ -30,6 +30,7 @@ interface HomePageData {
   subtopics: Awaited<ReturnType<typeof getSubtopics>>;
   posts: Awaited<ReturnType<typeof getPosts>>;
   imageSlides: Awaited<ReturnType<typeof getHeroMedia>>;
+  landingTopics: Awaited<ReturnType<typeof getLandingTopics>>;
   webinars: Awaited<ReturnType<typeof getWebinars>>;
   previewPercent: number;
   heroImageSliderEnabled: boolean;
@@ -77,11 +78,12 @@ const loadSiteBootstrapSnapshot = unstable_cache(
 
 const loadHomePageData = unstable_cache(
   async (): Promise<HomePageData> => {
-    const [categories, subtopics, posts, imageSlides, webinars, settings] = await Promise.all([
+    const [categories, subtopics, posts, imageSlides, landingTopics, webinars, settings] = await Promise.all([
       getCategories(),
       getSubtopics(),
       getPosts(),
       getHeroMedia("image"),
+      getLandingTopics(false),
       getWebinars(false),
       getSiteSettings()
     ]);
@@ -91,6 +93,7 @@ const loadHomePageData = unstable_cache(
       subtopics,
       posts,
       imageSlides,
+      landingTopics,
       webinars,
       previewPercent: settings.contentPreviewPercent,
       heroImageSliderEnabled: settings.heroImageSliderEnabled
@@ -161,6 +164,7 @@ export async function getCachedHomePageData(): Promise<HomePageData> {
       subtopics: [],
       posts: [],
       imageSlides: [],
+      landingTopics: [],
       webinars: [],
       previewPercent: 20,
       heroImageSliderEnabled: false
@@ -260,3 +264,4 @@ export async function getCachedWebinarBySlug(slug: string) {
     return null;
   }
 }
+

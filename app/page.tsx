@@ -24,6 +24,7 @@ export default async function HomePage({
       initialSubtopics={data.subtopics}
       initialPosts={data.posts}
       initialImageSlides={data.imageSlides}
+      initialLandingTopics={data.landingTopics}
       initialWebinars={data.webinars}
       initialPreviewPercent={data.previewPercent}
       initialHeroImageSliderEnabled={data.heroImageSliderEnabled}

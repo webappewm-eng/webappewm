@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { LoginModal } from "@/components/auth/LoginModal";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { openCertificatePrint } from "@/lib/certificates/print";
 import {
   getCertificateTemplates,
   getUserCertificates,
@@ -17,55 +18,6 @@ interface CourseDetailClientProps {
   course: Course;
   ads?: CourseAd[];
   nextCourse?: { slug: string; title: string } | null;
-}
-
-function openCertificatePrint(input: {
-  courseTitle: string;
-  userName: string;
-  certificateNumber: string;
-  issuedAt: string;
-  template?: CertificateTemplate;
-}) {
-  const popup = window.open("", "_blank", "width=1100,height=760");
-  if (!popup) {
-    return;
-  }
-
-  const dateLabel = new Date(input.issuedAt).toLocaleDateString();
-  const bg = input.template?.backgroundImage ? `background-image:url('${input.template.backgroundImage}'); background-size:cover;` : "";
-  const signature = input.template?.signatureImage
-    ? `<img src="${input.template.signatureImage}" alt="signature" style="height:64px; object-fit:contain;"/>`
-    : "";
-
-  popup.document.write(`
-    <html>
-      <head>
-        <title>Certificate - ${input.courseTitle}</title>
-      </head>
-      <body style="margin:0; font-family:Arial, sans-serif; background:#f2f2f2; padding:24px;">
-        <div style="max-width:980px; margin:0 auto; border:8px solid #ff6b00; background:#fff; border-radius:16px; padding:34px; ${bg}">
-          <div style="font-size:12px; letter-spacing:2px; text-transform:uppercase; color:#ff6b00;">Engineer With Me</div>
-          <h1 style="margin:8px 0 6px; font-size:46px;">Certificate of Completion</h1>
-          <p style="margin:0; font-size:18px; color:#333;">This is awarded to</p>
-          <h2 style="margin:8px 0; font-size:38px;">${input.userName}</h2>
-          <p style="font-size:18px; color:#333; margin-top:10px;">for successfully completing <strong>${input.courseTitle}</strong></p>
-          <p style="font-size:15px; color:#555; margin-top:18px;">Certificate Number: ${input.certificateNumber}</p>
-          <p style="font-size:15px; color:#555; margin-top:6px;">Issued on: ${dateLabel}</p>
-          <div style="display:flex; justify-content:space-between; align-items:end; margin-top:36px;">
-            <div>
-              <div style="border-top:1px solid #333; width:220px; margin-top:26px;"></div>
-              <div style="font-size:13px; color:#555; margin-top:6px;">Authorized Signature</div>
-            </div>
-            ${signature}
-          </div>
-        </div>
-      </body>
-    </html>
-  `);
-
-  popup.document.close();
-  popup.focus();
-  popup.print();
 }
 
 function renderAdItem(ad: CourseAd) {
@@ -118,6 +70,7 @@ export function CourseDetailClient({ course, ads = [], nextCourse = null }: Cour
   const [busy, setBusy] = useState(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const [selectedLessonId, setSelectedLessonId] = useState("");
+  const [testPanelOpen, setTestPanelOpen] = useState(false);
 
   const sortedLessons = useMemo(
     () => course.lessons.slice().sort((a, b) => a.order - b.order),
@@ -133,6 +86,7 @@ export function CourseDetailClient({ course, ads = [], nextCourse = null }: Cour
   const allLessonsCompleted = lessonIds.length > 0 && lessonIds.every((id) => completedSet.has(id));
   const activeLessonIndex = Math.max(0, sortedLessons.findIndex((lesson) => lesson.id === selectedLessonId));
   const activeLesson = sortedLessons[activeLessonIndex] ?? sortedLessons[0] ?? null;
+  const hasTestQuestions = course.questions.length > 0;
 
   const activeTemplate = useMemo(() => {
     if (!templates.length) {
@@ -178,6 +132,7 @@ export function CourseDetailClient({ course, ads = [], nextCourse = null }: Cour
     testUnlocked: boolean;
     testPassed: boolean;
     score: number;
+    testAttempts: number;
     certificateId?: string;
   }) {
     if (!user?.uid || !user.email) {
@@ -194,6 +149,7 @@ export function CourseDetailClient({ course, ads = [], nextCourse = null }: Cour
       testUnlocked: next.testUnlocked,
       testPassed: next.testPassed,
       score: next.score,
+      testAttempts: next.testAttempts,
       certificateId: next.certificateId ?? ""
     });
 
@@ -206,6 +162,7 @@ export function CourseDetailClient({ course, ads = [], nextCourse = null }: Cour
       testUnlocked: next.testUnlocked,
       testPassed: next.testPassed,
       score: next.score,
+      testAttempts: next.testAttempts,
       certificateId: next.certificateId ?? "",
       updatedAt: new Date().toISOString()
     }));
@@ -232,6 +189,7 @@ export function CourseDetailClient({ course, ads = [], nextCourse = null }: Cour
         testUnlocked: nextUnlocked,
         testPassed: progress?.testPassed ?? false,
         score: progress?.score ?? 0,
+        testAttempts: progress?.testAttempts ?? 0,
         certificateId: progress?.certificateId ?? ""
       });
     } catch {
@@ -239,6 +197,28 @@ export function CourseDetailClient({ course, ads = [], nextCourse = null }: Cour
     } finally {
       setBusy(false);
     }
+  }
+
+  function handleOpenTestPanel() {
+    setStatus("");
+
+    if (!user?.uid) {
+      setStatus("Login is required to take this certification test.");
+      setLoginOpen(true);
+      return;
+    }
+
+    if (!allLessonsCompleted) {
+      setStatus("Complete all sections first, then start the certification test.");
+      return;
+    }
+
+    if (!hasTestQuestions) {
+      setStatus("This course has no test questions yet. Certification test is optional in admin.");
+      return;
+    }
+
+    setTestPanelOpen(true);
   }
 
   async function submitTest(event: FormEvent<HTMLFormElement>) {
@@ -256,8 +236,14 @@ export function CourseDetailClient({ course, ads = [], nextCourse = null }: Cour
       return;
     }
 
-    if (!course.questions.length) {
+    if (!hasTestQuestions) {
       setStatus("No test questions configured for this course.");
+      return;
+    }
+
+    const unansweredIndex = course.questions.findIndex((_, index) => answers[index] === undefined);
+    if (unansweredIndex >= 0) {
+      setStatus(`Please answer question ${unansweredIndex + 1} before submitting.`);
       return;
     }
 
@@ -271,6 +257,7 @@ export function CourseDetailClient({ course, ads = [], nextCourse = null }: Cour
         }
       });
 
+      const attempts = (progress?.testAttempts ?? 0) + 1;
       const score = Math.round((correct / course.questions.length) * 100);
       const passed = score >= course.passingScore;
       let certificateId = progress?.certificateId ?? "";
@@ -281,8 +268,12 @@ export function CourseDetailClient({ course, ads = [], nextCourse = null }: Cour
           courseId: course.id,
           userId: user.uid,
           userEmail: user.email ?? "",
-          userName: user.email.split("@")[0],
-          templateId: activeTemplate?.id ?? ""
+          userName: user.displayName?.trim() || user.email.split("@")[0],
+          templateId: activeTemplate?.id ?? "",
+          score,
+          attempts,
+          totalQuestions: course.questions.length,
+          passingScore: course.passingScore
         });
         certificateId = created.id;
         issued = created;
@@ -294,22 +285,27 @@ export function CourseDetailClient({ course, ads = [], nextCourse = null }: Cour
         testUnlocked: true,
         testPassed: passed,
         score,
+        testAttempts: attempts,
         certificateId
       });
 
       if (passed) {
-        setStatus(`Great work. You passed with ${score}% and your certificate is ready.`);
+        setStatus(`Great work. You passed with ${score}% in ${attempts} attempt(s). Certificate is ready.`);
         if (issued) {
           openCertificatePrint({
             courseTitle: course.title,
             userName: issued.userName,
             certificateNumber: issued.certificateNumber,
             issuedAt: issued.issuedAt,
+            score: issued.score || score,
+            attempts: issued.attempts || attempts,
+            totalQuestions: issued.totalQuestions || course.questions.length,
+            passingScore: issued.passingScore || course.passingScore,
             template: activeTemplate
           });
         }
       } else {
-        setStatus(`Your score is ${score}%. Passing score is ${course.passingScore}%. Please retry.`);
+        setStatus(`Your score is ${score}%. Pass mark is ${course.passingScore}%. Attempts used: ${attempts}. Try again.`);
       }
     } catch {
       setStatus("Could not submit test right now.");
@@ -317,6 +313,11 @@ export function CourseDetailClient({ course, ads = [], nextCourse = null }: Cour
       setBusy(false);
     }
   }
+
+  const certificateScore = certificate?.score ?? progress?.score ?? 0;
+  const certificateAttempts = certificate?.attempts ?? progress?.testAttempts ?? 0;
+  const certificateQuestions = certificate?.totalQuestions ?? course.questions.length;
+  const certificatePassMark = certificate?.passingScore ?? course.passingScore;
 
   return (
     <>
@@ -339,7 +340,7 @@ export function CourseDetailClient({ course, ads = [], nextCourse = null }: Cour
       <section className="post-content" style={{ marginTop: "1rem" }}>
         <div className="post-content-inner">
           <div className="label">Course Sections</div>
-          <p className="muted">Use the sidebar to open each section. Mark each one complete to unlock the test.</p>
+          <p className="muted">Use the sidebar to open each section. Mark each one complete to unlock the certification button.</p>
 
           <div
             style={{
@@ -417,63 +418,94 @@ export function CourseDetailClient({ course, ads = [], nextCourse = null }: Cour
 
       <section className="post-content" style={{ marginTop: "1rem" }}>
         <div className="post-content-inner">
-          <div className="label">Certification Test</div>
-          <p className="muted">
-            {allLessonsCompleted ? "Test unlocked. Complete the quiz to generate your certificate." : "Complete all lessons to unlock test."}
-          </p>
+          <div className="label">Certification</div>
 
-          <form className="form-grid" onSubmit={submitTest}>
-            {course.questions.map((question, questionIndex) => (
-              <article className="notice" key={`${course.id}-q-${questionIndex}`}>
-                <strong>{questionIndex + 1}. {question.question}</strong>
-                <div className="table-like" style={{ marginTop: "0.55rem" }}>
-                  {question.options.map((option, optionIndex) => (
-                    <label key={`${course.id}-q-${questionIndex}-o-${optionIndex}`} style={{ display: "flex", gap: "0.45rem", alignItems: "center" }}>
-                      <input
-                        type="radio"
-                        name={`question-${questionIndex}`}
-                        checked={answers[questionIndex] === optionIndex}
-                        onChange={() => setAnswers((prev) => ({ ...prev, [questionIndex]: optionIndex }))}
-                        disabled={!allLessonsCompleted || busy}
-                      />
-                      {option}
-                    </label>
-                  ))}
-                </div>
-              </article>
-            ))}
-
-            <button className="btn btn-primary" type="submit" disabled={!allLessonsCompleted || busy}>
-              {busy ? "Submitting..." : "Submit Test"}
+          <article className="course-cert-cta-card">
+            <div className="course-cert-cta-copy">
+              <h3>Complete Test to Get Certified</h3>
+              <p>
+                Login is required. Finish all sections, answer every question, and pass {course.passingScore}% to generate your certificate.
+              </p>
+            </div>
+            <button
+              className="btn btn-primary"
+              type="button"
+              onClick={handleOpenTestPanel}
+              disabled={busy || !hasTestQuestions}
+            >
+              {hasTestQuestions ? "Complete Test to Get Certified" : "Certification Test Not Configured"}
             </button>
-          </form>
+          </article>
+
+          {testPanelOpen && hasTestQuestions ? (
+            <form className="form-grid" onSubmit={submitTest} style={{ marginTop: "1rem" }}>
+              {course.questions.map((question, questionIndex) => (
+                <article className="notice" key={`${course.id}-q-${questionIndex}`}>
+                  <strong>{questionIndex + 1}. {question.question}</strong>
+                  <div className="table-like" style={{ marginTop: "0.55rem" }}>
+                    {question.options.map((option, optionIndex) => (
+                      <label key={`${course.id}-q-${questionIndex}-o-${optionIndex}`} style={{ display: "flex", gap: "0.45rem", alignItems: "center" }}>
+                        <input
+                          type="radio"
+                          name={`question-${questionIndex}`}
+                          checked={answers[questionIndex] === optionIndex}
+                          onChange={() => setAnswers((prev) => ({ ...prev, [questionIndex]: optionIndex }))}
+                          disabled={busy}
+                        />
+                        {option}
+                      </label>
+                    ))}
+                  </div>
+                </article>
+              ))}
+
+              <div className="form-actions">
+                <button className="btn btn-primary" type="submit" disabled={busy}>
+                  {busy ? "Submitting..." : "Submit Certification Test"}
+                </button>
+                <button className="btn btn-outline" type="button" onClick={() => setTestPanelOpen(false)} disabled={busy}>
+                  Close Test Panel
+                </button>
+              </div>
+            </form>
+          ) : null}
 
           {progress ? (
             <div className="notice" style={{ marginTop: "0.85rem" }}>
               <strong>Your progress</strong>
               <p className="muted">
-                Lessons completed: {progress.completedLessonIds.length}/{lessonIds.length} | Score: {progress.score}% | {progress.testPassed ? "Passed" : "Not passed yet"}
+                Lessons completed: {progress.completedLessonIds.length}/{lessonIds.length} | Score: {progress.score}% | Attempts: {progress.testAttempts} | {progress.testPassed ? "Passed" : "Not passed yet"}
               </p>
             </div>
           ) : null}
 
           {certificate ? (
-            <div className="form-actions" style={{ marginTop: "0.8rem" }}>
-              <button
-                className="btn btn-outline"
-                type="button"
-                onClick={() =>
-                  openCertificatePrint({
-                    courseTitle: course.title,
-                    userName: certificate.userName,
-                    certificateNumber: certificate.certificateNumber,
-                    issuedAt: certificate.issuedAt,
-                    template: activeTemplate
-                  })
-                }
-              >
-                Download Certificate
-              </button>
+            <div className="notice" style={{ marginTop: "0.85rem" }}>
+              <strong>Certificate Ready</strong>
+              <p className="muted">
+                Score: {certificateScore}% | Attempts: {certificateAttempts} | Questions: {certificateQuestions} | Pass Mark: {certificatePassMark}%
+              </p>
+              <div className="form-actions" style={{ marginTop: "0.6rem" }}>
+                <button
+                  className="btn btn-outline"
+                  type="button"
+                  onClick={() =>
+                    openCertificatePrint({
+                      courseTitle: course.title,
+                      userName: certificate.userName,
+                      certificateNumber: certificate.certificateNumber,
+                      issuedAt: certificate.issuedAt,
+                      score: certificateScore,
+                      attempts: certificateAttempts,
+                      totalQuestions: certificateQuestions,
+                      passingScore: certificatePassMark,
+                      template: activeTemplate
+                    })
+                  }
+                >
+                  Download Certificate
+                </button>
+              </div>
             </div>
           ) : null}
 

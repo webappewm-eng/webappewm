@@ -9,8 +9,8 @@ import { LoginModal } from "@/components/auth/LoginModal";
 import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
 import { NotificationStrip } from "@/components/layout/NotificationStrip";
-import { getCategories, getHeroMedia, getPosts, getSiteSettings, getSubtopics, getWebinars } from "@/lib/firebase/data";
-import { Category, HeroMediaItem, Post, Subtopic, Webinar } from "@/lib/types";
+import { getCategories, getHeroMedia, getLandingTopics, getPosts, getSiteSettings, getSubtopics, getWebinars } from "@/lib/firebase/data";
+import { Category, HeroMediaItem, LandingTopic, Post, Subtopic, Webinar } from "@/lib/types";
 
 const learningPaths = [
   {
@@ -91,6 +91,7 @@ interface HomePageClientProps {
   initialSubtopics: Subtopic[];
   initialPosts: Post[];
   initialImageSlides: HeroMediaItem[];
+  initialLandingTopics: LandingTopic[];
   initialWebinars: Webinar[];
   initialPreviewPercent: number;
   initialHeroImageSliderEnabled: boolean;
@@ -104,6 +105,7 @@ export default function HomePageClient({
   initialSubtopics,
   initialPosts,
   initialImageSlides,
+  initialLandingTopics,
   initialWebinars,
   initialPreviewPercent,
   initialHeroImageSliderEnabled,
@@ -126,6 +128,7 @@ export default function HomePageClient({
   const [categories, setCategories] = useState<Category[]>(initialCategories);
   const [allSubtopics, setAllSubtopics] = useState<Subtopic[]>(initialSubtopics);
   const [posts, setPosts] = useState<Post[]>(initialPosts);
+  const [landingTopics, setLandingTopics] = useState<LandingTopic[]>(initialLandingTopics);
   const [webinars, setWebinars] = useState<Webinar[]>(initialWebinars.filter((item) => item.showOnHome));
 
   const [selectedCategory, setSelectedCategory] = useState<string>(initialSelectedCategory);
@@ -148,24 +151,24 @@ export default function HomePageClient({
   }, [allSubtopics, selectedCategory]);
 
   const browseTopics = useMemo(() => {
-    const categoryNameById = new Map(categories.map((item) => [item.id, item.name]));
-    return allSubtopics
+    return landingTopics
       .filter((item) => item.showOnHome !== false)
       .map((item) => ({
         id: item.id,
-        name: item.name,
+        name: item.title,
         href: `/topic/${encodeURIComponent(item.slug)}`,
-        categoryName: categoryNameById.get(item.categoryId) ?? "Topic"
+        categoryName: "Landing Topic"
       }));
-  }, [allSubtopics, categories]);
+  }, [landingTopics]);
   useEffect(() => {
     async function refreshFromFirebase() {
       try {
-        const [nextCategories, nextSubtopics, nextPosts, nextImageSlides, siteSettings, nextWebinars] = await Promise.all([
+        const [nextCategories, nextSubtopics, nextPosts, nextImageSlides, nextLandingTopics, siteSettings, nextWebinars] = await Promise.all([
           getCategories(),
           getSubtopics(),
           getPosts(),
           getHeroMedia("image"),
+          getLandingTopics(false),
           getSiteSettings(),
           getWebinars(false)
         ]);
@@ -174,6 +177,7 @@ export default function HomePageClient({
         setAllSubtopics(nextSubtopics);
         setPosts(nextPosts);
         setImageSlides(nextImageSlides);
+        setLandingTopics(nextLandingTopics);
         setPreviewPercent(siteSettings.contentPreviewPercent);
         setHeroImageSliderEnabled(siteSettings.heroImageSliderEnabled);
         setWebinars(nextWebinars.filter((item) => item.showOnHome));
@@ -591,5 +595,4 @@ export default function HomePageClient({
     </div>
   );
 }
-
 

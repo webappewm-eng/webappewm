@@ -249,6 +249,7 @@ export interface UserCourseProgress {
   testUnlocked: boolean;
   testPassed: boolean;
   score: number;
+  testAttempts: number;
   certificateId?: string;
   updatedAt: string;
 }
@@ -271,6 +272,10 @@ export interface UserCertificate {
   templateId: string;
   issuedAt: string;
   certificateNumber: string;
+  score: number;
+  attempts: number;
+  totalQuestions: number;
+  passingScore: number;
 }
 
 export interface PostAnalyticsBreakdown {
@@ -362,9 +367,11 @@ export interface LandingTopic {
   html: string;
   css: string;
   js: string;
+  showOnHome: boolean;
   showHeader: boolean;
   showFooter: boolean;
   isPublished: boolean;
   updatedAt: string;
 }
+
 

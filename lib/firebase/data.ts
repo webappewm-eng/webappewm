@@ -643,6 +643,7 @@ function mapLandingTopicDoc(data: Record<string, unknown>, id: string): LandingT
     html: String(data.html ?? ""),
     css: String(data.css ?? ""),
     js: String(data.js ?? ""),
+    showOnHome: data.showOnHome !== false,
     showHeader: data.showHeader !== false,
     showFooter: data.showFooter !== false,
     isPublished: Boolean(data.isPublished),
@@ -1996,6 +1997,7 @@ export async function getUserCourseProgress(courseId: string, userId: string): P
     testUnlocked: Boolean(data.testUnlocked),
     testPassed: Boolean(data.testPassed),
     score: Number(data.score ?? 0),
+    testAttempts: Number(data.testAttempts ?? 0),
     certificateId: sanitizeString(data.certificateId),
     updatedAt: normalizeDate(data.updatedAt)
   };
@@ -2009,6 +2011,7 @@ export async function upsertUserCourseProgress(input: {
   testUnlocked: boolean;
   testPassed: boolean;
   score: number;
+  testAttempts: number;
   certificateId?: string;
 }): Promise<void> {
   const payload = {
@@ -2065,6 +2068,7 @@ export async function getCourseProgressForAdmin(courseId?: string): Promise<User
         testUnlocked: Boolean(data.testUnlocked),
         testPassed: Boolean(data.testPassed),
         score: Number(data.score ?? 0),
+        testAttempts: Number(data.testAttempts ?? 0),
         certificateId: sanitizeString(data.certificateId),
         updatedAt: normalizeDate(data.updatedAt)
       } as UserCourseProgress;
@@ -2164,7 +2168,11 @@ export async function getUserCertificates(userId?: string): Promise<UserCertific
         userName: sanitizeString(data.userName),
         templateId: sanitizeString(data.templateId),
         issuedAt: normalizeDate(data.issuedAt),
-        certificateNumber: sanitizeString(data.certificateNumber)
+        certificateNumber: sanitizeString(data.certificateNumber),
+        score: Number(data.score ?? 0),
+        attempts: Number(data.attempts ?? 0),
+        totalQuestions: Number(data.totalQuestions ?? 0),
+        passingScore: Number(data.passingScore ?? 0)
       } as UserCertificate;
     })
     .sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
@@ -2192,6 +2200,7 @@ export async function getUserCourseProgressList(userId: string): Promise<UserCou
         testUnlocked: Boolean(data.testUnlocked),
         testPassed: Boolean(data.testPassed),
         score: Number(data.score ?? 0),
+        testAttempts: Number(data.testAttempts ?? 0),
         certificateId: sanitizeString(data.certificateId),
         updatedAt: normalizeDate(data.updatedAt)
       } as UserCourseProgress;
@@ -2223,7 +2232,11 @@ export async function getCertificateById(certificateId: string): Promise<UserCer
     userName: sanitizeString(data.userName),
     templateId: sanitizeString(data.templateId),
     issuedAt: normalizeDate(data.issuedAt),
-    certificateNumber: sanitizeString(data.certificateNumber)
+    certificateNumber: sanitizeString(data.certificateNumber),
+    score: Number(data.score ?? 0),
+    attempts: Number(data.attempts ?? 0),
+    totalQuestions: Number(data.totalQuestions ?? 0),
+    passingScore: Number(data.passingScore ?? 0)
   } as UserCertificate;
 }
 
@@ -2817,5 +2830,35 @@ export async function getVisitorAnalytics(): Promise<VisitorAnalyticsSummary> {
     byDate,
     byCountry
   };
+}
+
+
+export async function getVisitorCountryAnalyticsByDate(date: string): Promise<Array<{ country: string; count: number }>> {
+  const dateKey = sanitizeString(date).slice(0, 10);
+  if (!dateKey) {
+    return [];
+  }
+
+  const rows: VisitorEvent[] = !hasFirebaseConfig || !db
+    ? [...localStore.visitorEvents]
+    : (await getDocs(collection(db, "visitor_events"))).docs.map((item) =>
+        mapVisitorDoc(item.data() as Record<string, unknown>, item.id)
+      );
+
+  const byCountryMap: Record<string, number> = {};
+
+  rows.forEach((item) => {
+    const rowDateKey = item.firstVisitedAt.slice(0, 10);
+    if (rowDateKey !== dateKey) {
+      return;
+    }
+
+    const country = item.country || "Unknown";
+    byCountryMap[country] = (byCountryMap[country] ?? 0) + 1;
+  });
+
+  return Object.entries(byCountryMap)
+    .map(([country, count]) => ({ country, count }))
+    .sort((a, b) => b.count - a.count || a.country.localeCompare(b.country));
 }
 

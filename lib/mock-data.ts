@@ -42,11 +42,11 @@ export const mockCategories: Category[] = [
 ];
 
 export const mockSubtopics: Subtopic[] = [
-  { id: "sub-ohm", categoryId: "cat-electronics", name: "Ohm's Law", slug: "ohms-law", order: 1 },
-  { id: "sub-led", categoryId: "cat-electronics", name: "LED Circuits", slug: "led-circuits", order: 2 },
-  { id: "sub-capacitor", categoryId: "cat-electronics", name: "Capacitors", slug: "capacitors", order: 3 },
-  { id: "sub-gears", categoryId: "cat-mechanical", name: "Gear Basics", slug: "gear-basics", order: 1 },
-  { id: "sub-arduino", categoryId: "cat-software", name: "Arduino Basics", slug: "arduino-basics", order: 1 }
+  { id: "sub-ohm", categoryId: "cat-electronics", name: "Ohm's Law", slug: "ohms-law", order: 1, showOnHome: true},
+  { id: "sub-led", categoryId: "cat-electronics", name: "LED Circuits", slug: "led-circuits", order: 2, showOnHome: true},
+  { id: "sub-capacitor", categoryId: "cat-electronics", name: "Capacitors", slug: "capacitors", order: 3, showOnHome: true},
+  { id: "sub-gears", categoryId: "cat-mechanical", name: "Gear Basics", slug: "gear-basics", order: 1, showOnHome: true},
+  { id: "sub-arduino", categoryId: "cat-software", name: "Arduino Basics", slug: "arduino-basics", order: 1, showOnHome: true}
 ];
 
 const resistorContent = [
@@ -367,6 +367,4 @@ export const mockSiteSettings: SiteSettings = {
 };
 
 export const mockLandingTopics: LandingTopic[] = [];
-
-
 

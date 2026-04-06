@@ -240,25 +240,35 @@ export async function getCategories(): Promise<Category[]> {
 }
 
 export async function getSubtopics(categoryId?: string): Promise<Subtopic[]> {
+  const mapRow = (id: string, data: Record<string, unknown>): Subtopic => ({
+    id,
+    categoryId: String(data.categoryId ?? ""),
+    name: String(data.name ?? ""),
+    slug: String(data.slug ?? ""),
+    order: Number(data.order ?? 0),
+    showOnHome: data.showOnHome !== false
+  });
+
   if (!hasFirebaseConfig || !db) {
-    const rows = categoryId
-      ? localStore.subtopics.filter((item) => item.categoryId === categoryId)
-      : localStore.subtopics;
-    return sortByOrder(rows);
+    const rows = localStore.subtopics.map((item) => ({
+      ...item,
+      showOnHome: item.showOnHome !== false
+    }));
+    const filtered = categoryId ? rows.filter((item) => item.categoryId === categoryId) : rows;
+    return sortByOrder(filtered);
   }
 
   try {
     const snap = await getDocs(query(collection(db, "subtopics"), orderBy("order", "asc")));
-    const rows = snap.docs.map((item) => ({ id: item.id, ...(item.data() as Omit<Subtopic, "id">) }));
+    const rows = snap.docs.map((item) => mapRow(item.id, item.data() as Record<string, unknown>));
     return categoryId ? rows.filter((item) => item.categoryId === categoryId) : rows;
   } catch {
     const snap = await getDocs(collection(db, "subtopics"));
-    const rows = snap.docs.map((item) => ({ id: item.id, ...(item.data() as Omit<Subtopic, "id">) }));
+    const rows = snap.docs.map((item) => mapRow(item.id, item.data() as Record<string, unknown>));
     const filtered = categoryId ? rows.filter((item) => item.categoryId === categoryId) : rows;
     return sortByOrder(filtered);
   }
 }
-
 export async function getPosts(filters?: {
   categoryId?: string;
   subtopicId?: string;
@@ -2808,12 +2818,4 @@ export async function getVisitorAnalytics(): Promise<VisitorAnalyticsSummary> {
     byCountry
   };
 }
-
-
-
-
-
-
-
-
 

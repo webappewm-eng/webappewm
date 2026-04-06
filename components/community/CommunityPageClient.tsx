@@ -20,6 +20,13 @@ const fallbackSettings: Pick<SiteSettings, "communityApprovalEnabled"> = {
   communityApprovalEnabled: true
 };
 
+interface CommunityPageClientProps {
+  initialSettings?: Pick<SiteSettings, "communityApprovalEnabled">;
+  initialCategories?: CommunityCategory[];
+  initialQuestions?: CommunityQuestion[];
+  initialAnswers?: CommunityAnswer[];
+}
+
 function getInitials(name: string): string {
   const trimmed = name.trim();
   if (!trimmed) {
@@ -32,13 +39,18 @@ function getInitials(name: string): string {
   return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
 }
 
-export default function CommunityPageClient() {
+export default function CommunityPageClient({
+  initialSettings = fallbackSettings,
+  initialCategories = [],
+  initialQuestions = [],
+  initialAnswers = []
+}: CommunityPageClientProps = {}) {
   const { user } = useAuth();
 
-  const [settings, setSettings] = useState(fallbackSettings);
-  const [categories, setCategories] = useState<CommunityCategory[]>([]);
-  const [questions, setQuestions] = useState<CommunityQuestion[]>([]);
-  const [answers, setAnswers] = useState<CommunityAnswer[]>([]);
+  const [settings, setSettings] = useState(initialSettings);
+  const [categories, setCategories] = useState<CommunityCategory[]>(initialCategories);
+  const [questions, setQuestions] = useState<CommunityQuestion[]>(initialQuestions);
+  const [answers, setAnswers] = useState<CommunityAnswer[]>(initialAnswers);
 
   const [selectedCategory, setSelectedCategory] = useState(ALL_CATEGORIES);
   const [searchText, setSearchText] = useState("");
@@ -46,16 +58,25 @@ export default function CommunityPageClient() {
   const [questionModalOpen, setQuestionModalOpen] = useState(false);
   const [questionForm, setQuestionForm] = useState({
     name: "",
-    categoryId: "",
+    categoryId: initialCategories[0]?.id ?? "",
     question: ""
   });
 
   const [answerForms, setAnswerForms] = useState<Record<string, { name: string; answer: string }>>({});
   const [replyOpenByQuestion, setReplyOpenByQuestion] = useState<Record<string, boolean>>({});
   const [status, setStatus] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(
+    initialCategories.length === 0 && initialQuestions.length === 0 && initialAnswers.length === 0
+  );
 
-  async function refreshAll(nextCategoryId?: string, nextSearch?: string) {
+  async function refreshAll(
+    nextCategoryId?: string,
+    nextSearch?: string,
+    options?: { showLoader?: boolean }
+  ) {
+    if (options?.showLoader) {
+      setLoading(true);
+    }
     const categorySelection = nextCategoryId ?? selectedCategory;
     const search = nextSearch ?? searchText;
     const categoryId = categorySelection === ALL_CATEGORIES ? undefined : categorySelection;
@@ -83,15 +104,20 @@ export default function CommunityPageClient() {
 
       return { ...prev, categoryId: nextCategories[0]?.id ?? "" };
     });
+
+    if (options?.showLoader) {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
     async function load() {
       try {
-        await refreshAll();
+        await refreshAll(undefined, undefined, {
+          showLoader: initialCategories.length === 0 && initialQuestions.length === 0 && initialAnswers.length === 0
+        });
       } catch {
         setStatus("Community data could not be loaded right now.");
-      } finally {
         setLoading(false);
       }
     }
@@ -339,7 +365,7 @@ export default function CommunityPageClient() {
                                 <p className="community-answer-text">{answer.answer}</p>
                               </div>
                             ))
-                          ) : (
+                          ) : loading ? null : (
                             <p className="muted">No answers yet.</p>
                           )}
                         </div>
@@ -383,7 +409,7 @@ export default function CommunityPageClient() {
                       </article>
                     );
                   })
-                ) : (
+                ) : loading ? null : (
                   <p className="muted">No questions found for this category/search yet.</p>
                 )}
               </div>
@@ -442,5 +468,7 @@ export default function CommunityPageClient() {
     </div>
   );
 }
+
+
 
 

@@ -69,8 +69,6 @@ const learningPaths = [
   }
 ];
 
-const quickTopics = ["Battery", "Ohms Law", "Resistor", "Capacitor", "LED", "Gears", "Arduino", "ESP32"];
-
 const FALLBACK_POST_IMAGE = "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1200&q=80";
 
 function getSafeImageSrc(value: string | undefined): string {
@@ -149,6 +147,17 @@ export default function HomePageClient({
     return allSubtopics.filter((item) => item.categoryId === selectedCategory);
   }, [allSubtopics, selectedCategory]);
 
+  const browseTopics = useMemo(() => {
+    const categoryNameById = new Map(categories.map((item) => [item.id, item.name]));
+    return allSubtopics
+      .filter((item) => item.showOnHome !== false)
+      .map((item) => ({
+        id: item.id,
+        name: item.name,
+        href: `/community?search=${encodeURIComponent(item.name)}`,
+        categoryName: categoryNameById.get(item.categoryId) ?? "Topic"
+      }));
+  }, [allSubtopics, categories]);
   useEffect(() => {
     async function refreshFromFirebase() {
       try {
@@ -424,14 +433,18 @@ export default function HomePageClient({
         <section className="section reveal" id="browse-topics">
           <div className="label">Browse Topics</div>
           <h2 className="h2">Start with anything</h2>
-          <p className="body-txt">Choose a topic and jump directly into community questions and answers.</p>
+          <p className="body-txt">Topics shown here come from Admin Topics. Enable "Show in Home Browse Topics" when creating a topic.</p>
           <div className="topics-grid">
-            {quickTopics.map((topic) => (
-              <Link key={topic} className="topic-chip topic-chip-card" href="/community">
-                <span className="name">{topic}</span>
-                <span className="cat">Community</span>
-              </Link>
-            ))}
+            {browseTopics.length ? (
+              browseTopics.map((topic) => (
+                <Link key={topic.id} className="topic-chip topic-chip-card" href={topic.href}>
+                  <span className="name">{topic.name}</span>
+                  <span className="cat">{topic.categoryName}</span>
+                </Link>
+              ))
+            ) : (
+              <p className="muted">No topics selected for home browse yet.</p>
+            )}
           </div>
         </section>
         <section className="section section-accent" id="categories" hidden>
@@ -578,4 +591,5 @@ export default function HomePageClient({
     </div>
   );
 }
+
 

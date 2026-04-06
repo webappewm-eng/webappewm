@@ -11,6 +11,8 @@ import { uploadPostImage, uploadSiteAsset } from "@/lib/firebase/storage";
 import {
   createCategory,
   createCommunityCategory,
+  createCommunityQuestion,
+  createCommunityAnswer,
   createCustomPage,
   createHeroMedia,
   createNotification,
@@ -173,7 +175,7 @@ const emptyCourseForm = {
   slug: "",
   description: "",
   coverImage: "",
-  typeSlug: "basics",
+  typeSlug: "",
   templateId: "",
   passingScore: "70",
   lessonsInput: "",
@@ -312,6 +314,99 @@ function questionsToInput(questions: Course["questions"]): string {
     .join("\n");
 }
 
+
+interface CourseSectionDraft {
+  id: string;
+  title: string;
+  content: string;
+}
+
+interface CourseQuestionDraft {
+  id: string;
+  question: string;
+  optionA: string;
+  optionB: string;
+  optionC: string;
+  optionD: string;
+  correctOptionIndex: number;
+}
+
+function createCourseSectionDraft(partial?: Partial<Omit<CourseSectionDraft, "id">>): CourseSectionDraft {
+  return {
+    id: `course-section-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+    title: partial?.title ?? "New Section",
+    content: partial?.content ?? "Add section content"
+  };
+}
+
+function createCourseQuestionDraft(partial?: Partial<Omit<CourseQuestionDraft, "id">>): CourseQuestionDraft {
+  return {
+    id: `course-question-${Date.now()}-${Math.random().toString(16).slice(2, 8)}`,
+    question: partial?.question ?? "",
+    optionA: partial?.optionA ?? "Option A",
+    optionB: partial?.optionB ?? "Option B",
+    optionC: partial?.optionC ?? "",
+    optionD: partial?.optionD ?? "",
+    correctOptionIndex: partial?.correctOptionIndex ?? 0
+  };
+}
+
+function lessonsToSectionDrafts(lessons: Course["lessons"]): CourseSectionDraft[] {
+  if (!lessons.length) {
+    return [createCourseSectionDraft()];
+  }
+
+  return lessons
+    .slice()
+    .sort((a, b) => a.order - b.order)
+    .map((lesson) =>
+      createCourseSectionDraft({
+        title: lesson.title,
+        content: lesson.content
+      })
+    );
+}
+
+function questionsToQuestionDrafts(questions: Course["questions"]): CourseQuestionDraft[] {
+  if (!questions.length) {
+    return [createCourseQuestionDraft()];
+  }
+
+  return questions.map((question) => {
+    const optionA = question.options[0] ?? "Option A";
+    const optionB = question.options[1] ?? "Option B";
+    const optionC = question.options[2] ?? "";
+    const optionD = question.options[3] ?? "";
+
+    return createCourseQuestionDraft({
+      question: question.question,
+      optionA,
+      optionB,
+      optionC,
+      optionD,
+      correctOptionIndex: question.correctOptionIndex
+    });
+  });
+}
+
+function sectionDraftsToInput(rows: CourseSectionDraft[]): string {
+  return rows
+    .map((row) => `${row.title.trim() || "New Section"}::${row.content.trim() || "Add section content"}`)
+    .join("\n");
+}
+
+function questionDraftsToInput(rows: CourseQuestionDraft[]): string {
+  return rows
+    .map((row) => {
+      const options = [row.optionA, row.optionB, row.optionC, row.optionD]
+        .map((item) => item.trim())
+        .filter(Boolean);
+      const safeOptions = options.length ? options : ["Option A", "Option B"];
+      const correct = Math.min(safeOptions.length - 1, Math.max(0, Number(row.correctOptionIndex) || 0));
+      return `${row.question.trim() || "Question"}||${safeOptions.join("|")}||${correct}`;
+    })
+    .join("\n");
+}
 function parseCourseSectionsCsv(raw: string): Course["lessons"] {
   const lines = raw
     .split(/\r?\n/)
@@ -512,7 +607,7 @@ export default function AdminPage() {
   const [categoryForm, setCategoryForm] = useState({ name: "", slug: "", description: "" });
   const [categoryEditingId, setCategoryEditingId] = useState("");
 
-  const [subtopicForm, setSubtopicForm] = useState({ categoryId: "", name: "", slug: "" });
+  const [subtopicForm, setSubtopicForm] = useState({ categoryId: "", name: "", slug: "", showOnHome: true });
   const [subtopicEditingId, setSubtopicEditingId] = useState("");
 
   const [postForm, setPostForm] = useState(emptyPostForm);
@@ -591,7 +686,8 @@ export default function AdminPage() {
 
   const [courseForm, setCourseForm] = useState(emptyCourseForm);
   const [courseEditingId, setCourseEditingId] = useState("");
-
+  const [courseSectionDrafts, setCourseSectionDrafts] = useState<CourseSectionDraft[]>([createCourseSectionDraft()]);
+  const [courseQuestionDrafts, setCourseQuestionDrafts] = useState<CourseQuestionDraft[]>([createCourseQuestionDraft()]);
   const [courseTypeForm, setCourseTypeForm] = useState(emptyCourseTypeForm);
   const [courseTypeEditingId, setCourseTypeEditingId] = useState("");
   const [courseAdForm, setCourseAdForm] = useState(emptyCourseAdForm);
@@ -752,18 +848,7 @@ export default function AdminPage() {
     });
 
     setCourseForm((prev) => {
-      const nextTemplateId = prev.templateId || (nextTemplates.find((item) => item.enabled)?.id ?? nextTemplates[0]?.id ?? "");
-      const nextTypeSlug =
-        prev.typeSlug ||
-        nextCourseTypes.find((item) => item.enabled)?.slug ||
-        nextCourseTypes[0]?.slug ||
-        "basics";
-
-      if (nextTemplateId === prev.templateId && nextTypeSlug === prev.typeSlug) {
-        return prev;
-      }
-
-      return { ...prev, templateId: nextTemplateId, typeSlug: nextTypeSlug };
+      return prev;
     });
   }, []);
   useEffect(() => {
@@ -892,7 +977,8 @@ export default function AdminPage() {
       await updateSubtopic(subtopicEditingId, {
         categoryId: subtopicForm.categoryId,
         name: subtopicForm.name,
-        slug: slugify(subtopicForm.slug || subtopicForm.name)
+        slug: slugify(subtopicForm.slug || subtopicForm.name),
+        showOnHome: subtopicForm.showOnHome
       });
       setStatus("Subtopic updated.");
     } else {
@@ -900,16 +986,16 @@ export default function AdminPage() {
         categoryId: subtopicForm.categoryId,
         name: subtopicForm.name,
         slug: slugify(subtopicForm.slug || subtopicForm.name),
-        order: subtopics.filter((item) => item.categoryId === subtopicForm.categoryId).length + 1
+        order: subtopics.filter((item) => item.categoryId === subtopicForm.categoryId).length + 1,
+        showOnHome: subtopicForm.showOnHome
       });
       setStatus("Subtopic created.");
     }
 
-    setSubtopicForm((prev) => ({ ...prev, name: "", slug: "" }));
+    setSubtopicForm((prev) => ({ ...prev, name: "", slug: "", showOnHome: true }));
     setSubtopicEditingId("");
     await refreshAll();
   }
-
   async function handleCoverImageUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) {
@@ -1496,6 +1582,266 @@ export default function AdminPage() {
     await refreshAll();
   }
 
+  async function handleSeedDemoEducationData() {
+    setStatus("Seeding demo data. Please wait...");
+
+    let createdTopicPages = 0;
+    let createdSubtopics = 0;
+    let createdQuestions = 0;
+    let createdAnswers = 0;
+    let createdCourses = 0;
+
+    const nowIso = new Date().toISOString();
+
+    let nextCategories = await getCategories();
+    if (!nextCategories.length) {
+      const fallbackCategories = [
+        { name: "Electronics", slug: "electronics", description: "Components and circuits", order: 1 },
+        { name: "Mechanical", slug: "mechanical", description: "Mechanisms and machines", order: 2 },
+        { name: "Software", slug: "software", description: "Programming and embedded systems", order: 3 }
+      ];
+
+      for (const item of fallbackCategories) {
+        await createCategory(item);
+      }
+      nextCategories = await getCategories();
+    }
+
+    const existingSubtopics = await getSubtopics();
+    const subtopicSeeds = [
+      { name: "Voltage Basics", slug: "voltage-basics", categoryIndex: 0 },
+      { name: "Current Flow", slug: "current-flow", categoryIndex: 0 },
+      { name: "Kirchhoff Laws", slug: "kirchhoff-laws", categoryIndex: 0 },
+      { name: "Gear Ratio", slug: "gear-ratio", categoryIndex: 1 },
+      { name: "Embedded C", slug: "embedded-c", categoryIndex: 2 }
+    ];
+
+    for (const seed of subtopicSeeds) {
+      if (existingSubtopics.some((item) => item.slug === seed.slug)) {
+        continue;
+      }
+
+      const category = nextCategories[seed.categoryIndex] ?? nextCategories[0];
+      if (!category) {
+        continue;
+      }
+
+      await createSubtopic({
+        categoryId: category.id,
+        name: seed.name,
+        slug: seed.slug,
+        order: existingSubtopics.filter((item) => item.categoryId === category.id).length + 1,
+        showOnHome: true
+      });
+      createdSubtopics += 1;
+    }
+
+    const existingLandingTopics = await getLandingTopics(true);
+    const landingSeeds = [
+      {
+        title: "Ohm Law Visual Lab",
+        slug: "demo-ohm-law-visual-lab",
+        html: '<section class="demo-topic"><h1>Ohm Law Visual Lab</h1><p>Interactive engineering story block.</p><button>Run Preview</button></section>',
+        css: '.demo-topic{padding:2rem;border:1px solid #ff7a00;border-radius:14px;background:linear-gradient(140deg,#fff8f2,#fff);font-family:monospace}.demo-topic h1{margin:0 0 .5rem;color:#ff7a00}',
+        js: 'console.log("Ohm Law Visual Lab loaded");'
+      },
+      {
+        title: "Motor Starter Blueprint",
+        slug: "demo-motor-starter-blueprint",
+        html: '<section class="demo-topic"><h1>Motor Starter Blueprint</h1><p>Step-by-step wiring flow.</p><button>Open Diagram</button></section>',
+        css: '.demo-topic{padding:2rem;border:1px solid #222;border-radius:14px;background:#fff;font-family:monospace}.demo-topic h1{margin:0 0 .5rem}',
+        js: 'console.log("Motor Starter Blueprint loaded");'
+      },
+      {
+        title: "PLC Ladder Starter",
+        slug: "demo-plc-ladder-starter",
+        html: '<section class="demo-topic"><h1>PLC Ladder Starter</h1><p>Practice rungs with live notes.</p><button>Simulate</button></section>',
+        css: '.demo-topic{padding:2rem;border:1px dashed #ff7a00;border-radius:14px;background:#fffdf9;font-family:monospace}.demo-topic h1{margin:0 0 .5rem}',
+        js: 'console.log("PLC Ladder Starter loaded");'
+      },
+      {
+        title: "CAD to CNC Flow",
+        slug: "demo-cad-to-cnc-flow",
+        html: '<section class="demo-topic"><h1>CAD to CNC Flow</h1><p>From design to machining preview.</p><button>Start Flow</button></section>',
+        css: '.demo-topic{padding:2rem;border:1px solid #2d2d2d;border-radius:14px;background:linear-gradient(130deg,#ffffff,#f5f5f5);font-family:monospace}.demo-topic h1{margin:0 0 .5rem}',
+        js: 'console.log("CAD to CNC Flow loaded");'
+      },
+      {
+        title: "Embedded Debug Arena",
+        slug: "demo-embedded-debug-arena",
+        html: '<section class="demo-topic"><h1>Embedded Debug Arena</h1><p>Trace, inspect, and fix firmware signals.</p><button>Inspect Signals</button></section>',
+        css: '.demo-topic{padding:2rem;border:1px solid #ff7a00;border-radius:14px;background:linear-gradient(130deg,#fff,#fff4ea);font-family:monospace}.demo-topic h1{margin:0 0 .5rem;color:#ff7a00}',
+        js: 'console.log("Embedded Debug Arena loaded");'
+      }
+    ];
+
+    for (const seed of landingSeeds) {
+      if (existingLandingTopics.some((item) => item.slug === seed.slug)) {
+        continue;
+      }
+
+      await createLandingTopic({
+        title: seed.title,
+        slug: seed.slug,
+        html: seed.html,
+        css: seed.css,
+        js: seed.js,
+        showHeader: true,
+        showFooter: true,
+        isPublished: true
+      });
+      createdTopicPages += 1;
+    }
+
+    let communityCategories = await getCommunityCategoriesForAdmin();
+    if (!communityCategories.length) {
+      const communityCategorySeeds = [
+        { name: "Electronics Q&A", slug: "electronics-qa", description: "Circuit doubts", order: 1, enabled: true },
+        { name: "Mechanical Q&A", slug: "mechanical-qa", description: "Machine doubts", order: 2, enabled: true },
+        { name: "Software Q&A", slug: "software-qa", description: "Code doubts", order: 3, enabled: true }
+      ];
+      for (const seed of communityCategorySeeds) {
+        await createCommunityCategory(seed);
+      }
+      communityCategories = await getCommunityCategoriesForAdmin();
+    }
+
+    const questionSeeds = [
+      "Why does LED burn without resistor?",
+      "How to calculate motor torque quickly?",
+      "Best way to debounce a push button in firmware?"
+    ];
+
+    const existingQuestions = await getCommunityQuestionsForAdmin();
+    for (let i = 0; i < questionSeeds.length; i += 1) {
+      const questionText = questionSeeds[i];
+      if (existingQuestions.some((item) => item.question.toLowerCase() === questionText.toLowerCase())) {
+        continue;
+      }
+
+      const category = communityCategories[i % Math.max(communityCategories.length, 1)];
+      if (!category) {
+        continue;
+      }
+
+      await createCommunityQuestion({
+        categoryId: category.id,
+        question: questionText,
+        authorName: "Demo User",
+        authorEmail: "demo@engineerwithme.com",
+        authorUserId: "demo-user",
+        requiresApproval: false
+      });
+      createdQuestions += 1;
+    }
+
+    const refreshedQuestions = await getCommunityQuestionsForAdmin();
+    const existingAnswers = await getCommunityAnswersForAdmin();
+    const answerSeeds = [
+      {
+        question: "Why does LED burn without resistor?",
+        answer: "LED needs current limiting. Add resistor using R = (Vsupply - Vled) / Iled."
+      },
+      {
+        question: "How to calculate motor torque quickly?",
+        answer: "Use T = P / omega. Convert RPM to rad/s before calculating."
+      },
+      {
+        question: "Best way to debounce a push button in firmware?",
+        answer: "Use a 20-50ms debounce timer and validate stable state before action."
+      }
+    ];
+
+    for (const seed of answerSeeds) {
+      const question = refreshedQuestions.find(
+        (item) => item.question.toLowerCase() === seed.question.toLowerCase()
+      );
+      if (!question) {
+        continue;
+      }
+
+      const alreadyExists = existingAnswers.some(
+        (item) => item.questionId === question.id && item.answer.toLowerCase() === seed.answer.toLowerCase()
+      );
+      if (alreadyExists) {
+        continue;
+      }
+
+      await createCommunityAnswer({
+        questionId: question.id,
+        categoryId: question.categoryId,
+        answer: seed.answer,
+        authorName: "Demo Mentor",
+        authorEmail: "mentor@engineerwithme.com",
+        authorUserId: "demo-mentor",
+        requiresApproval: false
+      });
+      createdAnswers += 1;
+    }
+
+    const requiredCourseTypes = [
+      { name: "Basics", slug: "basics", order: 1 },
+      { name: "Free Learning", slug: "free-learning", order: 2 },
+      { name: "Paid Course", slug: "paid-course", order: 3 }
+    ];
+    let courseTypesAll = await getCourseTypesForAdmin();
+
+    for (const required of requiredCourseTypes) {
+      if (courseTypesAll.some((item) => item.slug === required.slug)) {
+        continue;
+      }
+      await createCourseType({
+        name: required.name,
+        slug: required.slug,
+        order: required.order,
+        enabled: true
+      });
+      courseTypesAll = await getCourseTypesForAdmin();
+    }
+
+    const courseTypes = courseTypesAll.filter((item) => item.enabled);
+    const existingCourses = await getCourses(true);
+    const templates = await getCertificateTemplates();
+    const defaultTemplateId = templates.find((item) => item.enabled)?.id ?? templates[0]?.id ?? "";
+
+    for (const type of courseTypes) {
+      for (let i = 1; i <= 2; i += 1) {
+        const slug = `demo-${type.slug}-${i}`;
+        if (existingCourses.some((item) => item.slug === slug)) {
+          continue;
+        }
+
+        await createCourse({
+          title: `${type.name} Demo Course ${i}`,
+          slug,
+          description: `Demo course ${i} for ${type.name}.`,
+          coverImage: "",
+          typeSlug: type.slug,
+          templateId: defaultTemplateId,
+          lessons: [
+            { id: `lesson-${slug}-1`, title: "Introduction", content: "Course overview and goals.", order: 1 },
+            { id: `lesson-${slug}-2`, title: "Core Concept", content: "Main engineering concept with examples.", order: 2 },
+            { id: `lesson-${slug}-3`, title: "Practice", content: "Try the guided implementation steps.", order: 3 }
+          ],
+          passingScore: 70,
+          questions: [
+            { question: "What is the key formula used in this module?", options: ["A", "B", "C"], correctOptionIndex: 0 },
+            { question: "What is the safest next step before testing?", options: ["Measure", "Ignore", "Skip"], correctOptionIndex: 0 }
+          ],
+          adsEnabled: false,
+          adIds: [],
+          isPublished: true
+        });
+        createdCourses += 1;
+      }
+    }
+
+    await refreshAll();
+
+    setStatus(
+      `Demo data ready. Landing topics: ${createdTopicPages}, Browse topics: ${createdSubtopics}, Community Q: ${createdQuestions}, Community A: ${createdAnswers}, Courses: ${createdCourses}.`
+    );
+  }
   async function handleCommunityApprovalToggle() {
     const nextValue = !settings.communityApprovalEnabled;
     await updateSiteAppearanceSettings({ communityApprovalEnabled: nextValue });
@@ -1607,6 +1953,7 @@ export default function AdminPage() {
       if (!lessons.length) {
         setStatus("No sections found in the uploaded file.");
       } else {
+        setCourseSectionDrafts(lessonsToSectionDrafts(lessons));
         setCourseForm((prev) => ({ ...prev, lessonsInput: lessonsToInput(lessons) }));
         setStatus(`${lessons.length} section(s) imported.`);
       }
@@ -1617,15 +1964,64 @@ export default function AdminPage() {
     }
   }
 
-  function handleAddSectionLine() {
-    setCourseForm((prev) => ({
-      ...prev,
-      lessonsInput: prev.lessonsInput.trim()
-        ? `${prev.lessonsInput.trim()}\nNew Section::Add section content`
-        : "New Section::Add section content"
-    }));
+  function syncSectionDrafts(rows: CourseSectionDraft[]) {
+    setCourseSectionDrafts(rows);
+    setCourseForm((prev) => ({ ...prev, lessonsInput: sectionDraftsToInput(rows) }));
   }
 
+  function syncQuestionDrafts(rows: CourseQuestionDraft[]) {
+    setCourseQuestionDrafts(rows);
+    setCourseForm((prev) => ({ ...prev, questionsInput: questionDraftsToInput(rows) }));
+  }
+
+  function handleLoadSectionFieldsFromText() {
+    const lessons = parseLessonsInput(courseForm.lessonsInput);
+    const rows = lessonsToSectionDrafts(lessons);
+    setCourseSectionDrafts(rows);
+    setStatus(`${rows.length} section field row(s) loaded from text.`);
+  }
+
+  function handleAddSectionField() {
+    syncSectionDrafts([...courseSectionDrafts, createCourseSectionDraft()]);
+  }
+
+  function handleUpdateSectionField(rowId: string, patch: Partial<Omit<CourseSectionDraft, "id">>) {
+    const rows = courseSectionDrafts.map((row) => (row.id === rowId ? { ...row, ...patch } : row));
+    syncSectionDrafts(rows);
+  }
+
+  function handleRemoveSectionField(rowId: string) {
+    const rows = courseSectionDrafts.filter((row) => row.id !== rowId);
+    syncSectionDrafts(rows.length ? rows : [createCourseSectionDraft()]);
+  }
+
+  function handleLoadQuestionFieldsFromText() {
+    const questions = parseQuestionsInput(courseForm.questionsInput);
+    const rows = questionsToQuestionDrafts(questions);
+    setCourseQuestionDrafts(rows);
+    setStatus(`${rows.length} question row(s) loaded from text.`);
+  }
+
+  function handleAddQuestionField() {
+    syncQuestionDrafts([...courseQuestionDrafts, createCourseQuestionDraft()]);
+  }
+
+  function handleUpdateQuestionField(
+    rowId: string,
+    patch: Partial<Omit<CourseQuestionDraft, "id">>
+  ) {
+    const rows = courseQuestionDrafts.map((row) => (row.id === rowId ? { ...row, ...patch } : row));
+    syncQuestionDrafts(rows);
+  }
+
+  function handleRemoveQuestionField(rowId: string) {
+    const rows = courseQuestionDrafts.filter((row) => row.id !== rowId);
+    syncQuestionDrafts(rows.length ? rows : [createCourseQuestionDraft()]);
+  }
+
+  function handleAddSectionLine() {
+    handleAddSectionField();
+  }
   function toggleCourseAdSelection(adId: string) {
     setCourseForm((prev) => {
       const exists = prev.adIds.includes(adId);
@@ -1752,6 +2148,8 @@ export default function AdminPage() {
       templateId: prev.templateId,
       typeSlug: prev.typeSlug
     }));
+    setCourseSectionDrafts([createCourseSectionDraft()]);
+    setCourseQuestionDrafts([createCourseQuestionDraft()]);
     setCourseEditingId("");
     await refreshAll();
   }
@@ -2373,6 +2771,152 @@ export default function AdminPage() {
             </div>
           </section>
 
+          <section className="admin-section admin-card" hidden={!isTabActive("general")}>
+            <h3>Hero Slider Media (Image)</h3>
+            <p className="muted">Recommended size: images 1600x900 (16:9).</p>
+            <form className="form-grid" onSubmit={handleHeroDraftRowsSubmit}>
+              <div className="form-actions">
+                <button className="btn btn-outline" type="button" onClick={addHeroDraftRow}>+ Add Slide</button>
+              </div>
+              {heroDraftRows.map((row, index) => (
+                <div className="notice" key={row.id}>
+                  <strong>Slide {index + 1}</strong>
+                  <div className="form-grid" style={{ marginTop: "0.55rem" }}>
+                    <input value="Image slide" disabled />
+                    <input
+                      placeholder="Slide title"
+                      value={row.title}
+                      onChange={(event) => updateHeroDraftRow(row.id, { title: event.target.value })}
+                    />
+                    <input
+                      placeholder="Media URL"
+                      value={row.source}
+                      onChange={(event) => updateHeroDraftRow(row.id, { source: event.target.value })}
+                    />
+                    <input
+                      placeholder="Redirect link (optional)"
+                      value={row.redirectUrl}
+                      onChange={(event) => updateHeroDraftRow(row.id, { redirectUrl: event.target.value })}
+                    />
+                    <input type="file" accept="image/*" onChange={(event) => void handleHeroDraftFileUpload(row.id, event)} />
+                  </div>
+                  <div className="form-actions" style={{ marginTop: "0.6rem" }}>
+                    <button className="btn btn-outline" type="button" onClick={() => removeHeroDraftRow(row.id)}>
+                      Remove Row
+                    </button>
+                  </div>
+                </div>
+              ))}
+              <div className="form-actions">
+                <button className="btn btn-primary" type="submit">Create Slides</button>
+              </div>
+            </form>
+
+            <form className="form-grid" onSubmit={handleHeroMediaSubmit}>
+              <input value="Image slide" disabled />
+              <input
+                placeholder="Slide title"
+                value={heroForm.title}
+                onChange={(event) => setHeroForm((prev) => ({ ...prev, title: event.target.value }))}
+                required
+              />
+              <input
+                placeholder="Media URL"
+                value={heroForm.source}
+                onChange={(event) => setHeroForm((prev) => ({ ...prev, source: event.target.value }))}
+                required
+              />
+              <input
+                placeholder="Redirect link (optional)"
+                value={heroForm.redirectUrl}
+                onChange={(event) => setHeroForm((prev) => ({ ...prev, redirectUrl: event.target.value }))}
+              />
+              <input type="file" accept="image/*" onChange={handleHeroMediaFileUpload} />
+              <textarea
+                rows={3}
+                placeholder="Bulk redirect links (optional, one link per line in upload order)"
+                value={heroBulkRedirectLinks}
+                onChange={(event) => setHeroBulkRedirectLinks(event.target.value)}
+              />
+              <input type="file" accept="image/*" multiple onChange={handleHeroMediaMultiUpload} />
+              <input
+                type="number"
+                min={0}
+                placeholder="Order"
+                value={heroForm.order}
+                onChange={(event) => setHeroForm((prev) => ({ ...prev, order: event.target.value }))}
+              />
+              <label>
+                <input
+                  type="checkbox"
+                  checked={heroForm.enabled}
+                  onChange={(event) => setHeroForm((prev) => ({ ...prev, enabled: event.target.checked }))}
+                />
+                Enabled
+              </label>
+              <div className="form-actions">
+                <button className="btn btn-primary" type="submit">
+                  {heroEditingId ? "Update Media" : "Add Media"}
+                </button>
+                {heroEditingId ? (
+                  <button
+                    className="btn btn-outline"
+                    type="button"
+                    onClick={() => {
+                      setHeroEditingId("");
+                      setHeroForm({ section: "image", title: "", source: "", redirectUrl: "", order: "1", enabled: true });
+                    }}
+                  >
+                    Cancel Edit
+                  </button>
+                ) : null}
+              </div>
+            </form>
+
+            <div className="table-like">
+              {heroMedia.filter((item) => item.section === "image").length ? ( heroMedia.filter((item) => item.section === "image").map((item) => (
+                  <div className="notice" key={item.id}>
+                    <strong>{item.title}</strong>
+                    <p className="muted">
+                      order {item.order} | {item.enabled ? "enabled" : "disabled"}
+                    </p>
+                    <p className="muted">{item.source}</p>
+                    <p className="muted">Redirect: {item.redirectUrl || "none"}</p>
+                    <div className="form-actions">
+                      <button
+                        className="btn btn-outline"
+                        type="button"
+                        onClick={() => {
+                          setHeroEditingId(item.id);
+                          setHeroForm({
+                            section: "image",
+                            title: item.title,
+                            source: item.source,
+                            redirectUrl: item.redirectUrl ?? "",
+                            order: String(item.order),
+                            enabled: item.enabled
+                          });
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className="btn btn-outline"
+                        type="button"
+                        onClick={() => void deleteHeroMedia(item.id).then(refreshAll)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="muted">No hero media configured yet.</p>
+              )}
+            </div>
+          </section>
+
+
           <section className="admin-section admin-card" hidden={!isTabActive("seo")}>
             <h3>404 Redirect Settings</h3>
             <p className="muted">Configure where users should go from invalid URLs.</p>
@@ -2559,18 +3103,20 @@ export default function AdminPage() {
               </select>
               <input placeholder="Subtopic name" value={subtopicForm.name} onChange={(event) => setSubtopicForm((prev) => ({ ...prev, name: event.target.value }))} required />
               <input placeholder="Subtopic slug" value={subtopicForm.slug} onChange={(event) => setSubtopicForm((prev) => ({ ...prev, slug: event.target.value }))} required />
+              <label><input type="checkbox" checked={subtopicForm.showOnHome} onChange={(event) => setSubtopicForm((prev) => ({ ...prev, showOnHome: event.target.checked }))} /> Show in Home Browse Topics section</label>
               <div className="form-actions">
                 <button className="btn btn-primary" type="submit">{subtopicEditingId ? "Update Subtopic" : "Add Subtopic"}</button>
-                {subtopicEditingId ? <button className="btn btn-outline" type="button" onClick={() => { setSubtopicEditingId(""); setSubtopicForm((prev) => ({ ...prev, name: "", slug: "" })); }}>Cancel Edit</button> : null}
+                {subtopicEditingId ? <button className="btn btn-outline" type="button" onClick={() => { setSubtopicEditingId(""); setSubtopicForm((prev) => ({ ...prev, name: "", slug: "", showOnHome: true })); }}>Cancel Edit</button> : null}
               </div>
             </form>
             <div className="table-like">
               {subtopics.map((item) => (
                 <div className="notice" key={item.id}>
                   <strong>{item.name}</strong> <span className="muted">({item.slug})</span>
-                  <p className="muted">Category: {categories.find((cat) => cat.id === item.categoryId)?.name ?? item.categoryId}</p>
+                  <p className="muted">Category: {categories.find((cat) => cat.id === item.categoryId)?.name ?? item.categoryId} | Home Browse: {item.showOnHome !== false ? "shown" : "hidden"}</p>
                   <div className="form-actions">
-                    <button className="btn btn-outline" type="button" onClick={() => { setSubtopicEditingId(item.id); setSubtopicForm({ categoryId: item.categoryId, name: item.name, slug: item.slug }); }}>Edit</button>
+                    <button className="btn btn-outline" type="button" onClick={() => { setSubtopicEditingId(item.id); setSubtopicForm({ categoryId: item.categoryId, name: item.name, slug: item.slug, showOnHome: item.showOnHome !== false }); }}>Edit</button>
+                    <button className="btn btn-outline" type="button" onClick={() => void updateSubtopic(item.id, { showOnHome: item.showOnHome === false }).then(refreshAll)}>{item.showOnHome !== false ? "Hide from Home" : "Show on Home"}</button>
                     <button className="btn btn-outline" type="button" onClick={() => void deleteSubtopic(item.id).then(refreshAll)}>Delete</button>
                   </div>
                 </div>
@@ -3026,10 +3572,15 @@ export default function AdminPage() {
 
           <section className="admin-section admin-card" hidden={!isTabActive("learning")}>
             <h3>Course and Certification Management</h3>
-            <p className="muted">
+                        <p className="muted">
               Section format: <code>Section title::Section content</code> per line. Questions format:
               <code>Question||Option A|Option B|Option C||0</code> per line.
             </p>
+            <div className="form-actions" style={{ marginBottom: "0.65rem" }}>
+              <button className="btn btn-outline" type="button" onClick={() => void handleSeedDemoEducationData()}>
+                Seed Demo Data (Topics + Community + Courses)
+              </button>
+            </div>
             <form className="form-grid" onSubmit={handleCourseSubmit}>
               <input
                 placeholder="Course title"
@@ -3047,6 +3598,7 @@ export default function AdminPage() {
                 value={courseForm.typeSlug}
                 onChange={(event) => setCourseForm((prev) => ({ ...prev, typeSlug: event.target.value }))}
               >
+                <option value="">Select course type (optional)</option>
                 {(courseTypesData.length ? courseTypesData : [{ id: "fallback-basics", name: "Basics", slug: "basics", enabled: true, order: 1, updatedAt: "" }])
                   .filter((item) => item.enabled)
                   .map((item) => (
@@ -3072,7 +3624,7 @@ export default function AdminPage() {
                 value={courseForm.templateId}
                 onChange={(event) => setCourseForm((prev) => ({ ...prev, templateId: event.target.value }))}
               >
-                <option value="">Select certificate template</option>
+                <option value="">Select certificate template (optional)</option>
                 {certificateTemplates.map((item) => (
                   <option key={`course-template-${item.id}`} value={item.id}>
                     {item.name} {item.enabled ? "(enabled)" : ""}
@@ -3091,6 +3643,7 @@ export default function AdminPage() {
               <div className="form-actions">
                 <button className="btn btn-outline" type="button" onClick={handleAddSectionLine}>+ Add Section</button>
                 <button className="btn btn-outline" type="button" onClick={downloadSampleCourseSectionsFile}>Download Section Sample</button>
+                <button className="btn btn-outline" type="button" onClick={handleLoadSectionFieldsFromText}>Load Section Fields from Text</button>
               </div>
               <input type="file" accept=".csv,.xlsx" onChange={handleCourseSectionsImport} />
               <textarea
@@ -3100,6 +3653,34 @@ export default function AdminPage() {
                 onChange={(event) => setCourseForm((prev) => ({ ...prev, lessonsInput: event.target.value }))}
                 required
               />
+
+              <div className="notice">
+                <strong>Section Fields Builder</strong>
+                <div className="form-actions" style={{ marginTop: "0.6rem" }}>
+                  <button className="btn btn-outline" type="button" onClick={handleAddSectionField}>+ Add Section Field</button>
+                </div>
+                {courseSectionDrafts.map((row, index) => (
+                  <div className="form-grid" key={row.id} style={{ marginTop: "0.65rem" }}>
+                    <input
+                      placeholder={`Section ${index + 1} title`}
+                      value={row.title}
+                      onChange={(event) => handleUpdateSectionField(row.id, { title: event.target.value })}
+                    />
+                    <textarea
+                      rows={2}
+                      placeholder="Section content"
+                      value={row.content}
+                      onChange={(event) => handleUpdateSectionField(row.id, { content: event.target.value })}
+                    />
+                    <button className="btn btn-outline" type="button" onClick={() => handleRemoveSectionField(row.id)}>Remove Section</button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="form-actions">
+                <button className="btn btn-outline" type="button" onClick={handleLoadQuestionFieldsFromText}>Load Question Fields from Text</button>
+                <button className="btn btn-outline" type="button" onClick={handleAddQuestionField}>+ Add Question</button>
+              </div>
               <textarea
                 rows={5}
                 placeholder="Question||Option A|Option B||0"
@@ -3108,6 +3689,52 @@ export default function AdminPage() {
                 required
               />
 
+              <div className="notice">
+                <strong>Question Fields Builder</strong>
+                {courseQuestionDrafts.map((row, index) => (
+                  <div className="form-grid" key={row.id} style={{ marginTop: "0.65rem" }}>
+                    <input
+                      placeholder={`Question ${index + 1}`}
+                      value={row.question}
+                      onChange={(event) => handleUpdateQuestionField(row.id, { question: event.target.value })}
+                    />
+                    <input
+                      placeholder="Option A"
+                      value={row.optionA}
+                      onChange={(event) => handleUpdateQuestionField(row.id, { optionA: event.target.value })}
+                    />
+                    <input
+                      placeholder="Option B"
+                      value={row.optionB}
+                      onChange={(event) => handleUpdateQuestionField(row.id, { optionB: event.target.value })}
+                    />
+                    <input
+                      placeholder="Option C (optional)"
+                      value={row.optionC}
+                      onChange={(event) => handleUpdateQuestionField(row.id, { optionC: event.target.value })}
+                    />
+                    <input
+                      placeholder="Option D (optional)"
+                      value={row.optionD}
+                      onChange={(event) => handleUpdateQuestionField(row.id, { optionD: event.target.value })}
+                    />
+                    <select
+                      value={String(row.correctOptionIndex)}
+                      onChange={(event) =>
+                        handleUpdateQuestionField(row.id, {
+                          correctOptionIndex: Number(event.target.value || "0")
+                        })
+                      }
+                    >
+                      <option value="0">Correct: Option A</option>
+                      <option value="1">Correct: Option B</option>
+                      <option value="2">Correct: Option C</option>
+                      <option value="3">Correct: Option D</option>
+                    </select>
+                    <button className="btn btn-outline" type="button" onClick={() => handleRemoveQuestionField(row.id)}>Remove Question</button>
+                  </div>
+                ))}
+              </div>
               <label>
                 <input
                   type="checkbox"
@@ -3162,6 +3789,8 @@ export default function AdminPage() {
                         templateId: prev.templateId,
                         typeSlug: prev.typeSlug
                       }));
+                      setCourseSectionDrafts([createCourseSectionDraft()]);
+                      setCourseQuestionDrafts([createCourseQuestionDraft()]);
                     }}
                   >
                     Cancel Edit
@@ -3200,6 +3829,8 @@ export default function AdminPage() {
                             adIds: item.adIds ?? [],
                             isPublished: item.isPublished
                           });
+                          setCourseSectionDrafts(lessonsToSectionDrafts(item.lessons));
+                          setCourseQuestionDrafts(questionsToQuestionDrafts(item.questions));
                         }}
                       >
                         Edit
@@ -3311,18 +3942,6 @@ export default function AdminPage() {
           <section className="admin-section admin-card" hidden={!isTabActive("learning")}>
             <h3>Webinar, Course Progress and Certificate Analytics</h3>
             <div className="table-like">
-              <div className="notice">
-                <strong>Webinar Registrations ({webinarRegistrations.length})</strong>
-                {webinarRegistrations.length ? (
-                  webinarRegistrations.slice(0, 40).map((item) => (
-                    <p className="muted" key={`webinar-registration-${item.id}`}>
-                      {webinars.find((webinar) => webinar.id === item.webinarId)?.title ?? item.webinarId} - {item.userEmail}
-                    </p>
-                  ))
-                ) : (
-                  <p className="muted">No webinar registrations yet.</p>
-                )}
-              </div>
               <div className="notice">
                 <strong>Course Progress ({courseProgress.length})</strong>
                 {courseProgress.length ? (
@@ -3650,26 +4269,6 @@ export default function AdminPage() {
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

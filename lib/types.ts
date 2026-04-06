@@ -12,6 +12,7 @@ export interface Subtopic {
   name: string;
   slug: string;
   order: number;
+  showOnHome: boolean;
 }
 
 export interface Post {
@@ -366,11 +367,4 @@ export interface LandingTopic {
   isPublished: boolean;
   updatedAt: string;
 }
-
-
-
-
-
-
-
 

@@ -6,6 +6,7 @@ import { FormEvent, useEffect, useMemo, useState } from "react";
 import { logoutUser } from "@/lib/firebase/auth";
 import { getNavigationLinks, getSiteSettings, getVisitorAnalytics } from "@/lib/firebase/data";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { LoginModal } from "@/components/auth/LoginModal";
 import { NavigationLink, SiteSettings } from "@/lib/types";
 
 interface HeaderProps {
@@ -157,6 +158,7 @@ export function Header({ onOpenLogin, searchValue = "", onSearchChange, showSear
   const [themeMode, setThemeMode] = useState<"light" | "dark">("light");
   const [internalSearch, setInternalSearch] = useState(searchValue);
   const [visitorCount, setVisitorCount] = useState(0);
+  const [loginOpenInternal, setLoginOpenInternal] = useState(false);
 
   useEffect(() => {
     setInternalSearch(searchValue);
@@ -245,6 +247,14 @@ export function Header({ onOpenLogin, searchValue = "", onSearchChange, showSear
     router.push(`/?search=${encodeURIComponent(value)}#topics`);
   }
 
+  function handleLoginOpen() {
+    if (onOpenLogin) {
+      onOpenLogin();
+      return;
+    }
+    setLoginOpenInternal(true);
+  }
+
   const logoSizeStyle = useMemo(
     () => ({ width: `${siteSettings.logoSize}px`, height: `${siteSettings.logoSize}px` }),
     [siteSettings.logoSize]
@@ -266,73 +276,79 @@ export function Header({ onOpenLogin, searchValue = "", onSearchChange, showSear
   }, [menuLinks]);
 
   return (
-    <header className="nav">
-      <Link href="/" className="logo">
-        <div className="logo-mark" style={logoSizeStyle}>
-          {siteSettings.logoMode === "image" && siteSettings.logoImageUrl ? (
-            <img className="logo-image" src={siteSettings.logoImageUrl} alt="Site logo" />
+    <>
+      <header className="nav">
+        <Link href="/" className="logo">
+          <div className="logo-mark" style={logoSizeStyle}>
+            {siteSettings.logoMode === "image" && siteSettings.logoImageUrl ? (
+              <img className="logo-image" src={siteSettings.logoImageUrl} alt="Site logo" />
+            ) : (
+              <span className="logo-e">E</span>
+            )}
+          </div>
+          <div className="logo-text">
+            <span className="l1">{siteSettings.logoTitleLine1}</span>
+            <span className="l2">
+              {siteSettings.logoTitleLine2} <span className="m">{siteSettings.logoAccentText}</span>
+            </span>
+          </div>
+        </Link>
+
+        <div className="nav-center">
+          <nav className="nav-links nav-menu">
+            {topLinks.map((item) => (
+              <MenuLink key={item.id} item={item} pathname={pathname} childrenLinks={childrenMap[item.id] ?? []} />
+            ))}
+          </nav>
+          {showSearch ? (
+            <form className="nav-search-wrap" onSubmit={handleSearchSubmit}>
+              <input
+                className="nav-search"
+                type="search"
+                placeholder="Search topics, posts, courses"
+                value={internalSearch}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setInternalSearch(value);
+                  if (onSearchChange) {
+                    onSearchChange(value);
+                  }
+                }}
+              />
+            </form>
+          ) : null}
+        </div>
+
+        <div className="nav-links nav-actions">
+          <span className="visitor-count visitor-count-highlight" title="Total visitors recorded">
+            <span className="visitor-count-label">Total Visitors</span>
+            <span className="visitor-count-number">{visitorCount.toLocaleString()}</span>
+          </span>
+          <button className="nav-btn secondary" onClick={toggleTheme} type="button">
+            {themeMode === "dark" ? "Light" : "Dark"}
+          </button>
+          {profile?.isAdmin ? (
+            <Link href="/admin" className="nav-btn secondary">
+              Admin
+            </Link>
+          ) : null}
+          {profile ? (
+            <button
+              className="nav-btn secondary"
+              onClick={() => {
+                void logoutUser();
+              }}
+            >
+              Logout
+            </button>
           ) : (
-            <span className="logo-e">E</span>
+            <button className="nav-btn" onClick={handleLoginOpen}>
+              Login
+            </button>
           )}
         </div>
-        <div className="logo-text">
-          <span className="l1">{siteSettings.logoTitleLine1}</span>
-          <span className="l2">
-            {siteSettings.logoTitleLine2} <span className="m">{siteSettings.logoAccentText}</span>
-          </span>
-        </div>
-      </Link>
-
-      <div className="nav-center">
-        <nav className="nav-links nav-menu">
-          {topLinks.map((item) => (
-            <MenuLink key={item.id} item={item} pathname={pathname} childrenLinks={childrenMap[item.id] ?? []} />
-          ))}
-        </nav>
-        {showSearch ? (
-          <form className="nav-search-wrap" onSubmit={handleSearchSubmit}>
-            <input
-              className="nav-search"
-              type="search"
-              placeholder="Search topics, posts, courses"
-              value={internalSearch}
-              onChange={(event) => {
-                const value = event.target.value;
-                setInternalSearch(value);
-                if (onSearchChange) {
-                  onSearchChange(value);
-                }
-              }}
-            />
-          </form>
-        ) : null}
-      </div>
-
-      <div className="nav-links nav-actions">
-        <span className="visitor-count visitor-count-highlight" title="Total visitors recorded">Total Visitors: {visitorCount.toLocaleString()}</span>
-        <button className="nav-btn secondary" onClick={toggleTheme} type="button">
-          {themeMode === "dark" ? "Light" : "Dark"}
-        </button>
-        {profile?.isAdmin ? (
-          <Link href="/admin" className="nav-btn secondary">
-            Admin
-          </Link>
-        ) : null}
-        {profile ? (
-          <button
-            className="nav-btn secondary"
-            onClick={() => {
-              void logoutUser();
-            }}
-          >
-            Logout
-          </button>
-        ) : (
-          <button className="nav-btn" onClick={() => onOpenLogin?.()}>
-            Login
-          </button>
-        )}
-      </div>
-    </header>
+      </header>
+      <LoginModal open={loginOpenInternal} onClose={() => setLoginOpenInternal(false)} />
+    </>
   );
 }

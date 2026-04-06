@@ -20,6 +20,18 @@ const fallbackSettings: Pick<SiteSettings, "communityApprovalEnabled"> = {
   communityApprovalEnabled: true
 };
 
+function getInitials(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    return "GU";
+  }
+  const parts = trimmed.split(/\s+/).filter(Boolean);
+  if (parts.length === 1) {
+    return parts[0].slice(0, 2).toUpperCase();
+  }
+  return `${parts[0][0] ?? ""}${parts[1][0] ?? ""}`.toUpperCase();
+}
+
 export default function CommunityPageClient() {
   const { user } = useAuth();
 
@@ -39,6 +51,7 @@ export default function CommunityPageClient() {
   });
 
   const [answerForms, setAnswerForms] = useState<Record<string, { name: string; answer: string }>>({});
+  const [replyOpenByQuestion, setReplyOpenByQuestion] = useState<Record<string, boolean>>({});
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -208,9 +221,13 @@ export default function CommunityPageClient() {
     }
   }
 
+  function toggleReplyForm(questionId: string) {
+    setReplyOpenByQuestion((prev) => ({ ...prev, [questionId]: !prev[questionId] }));
+  }
+
   return (
     <div className="app-shell">
-      <Header onOpenLogin={() => undefined} showSearch={false} />
+      <Header />
       <main className="page-main">
         <section className="section community-shell">
           <div className="label">Community</div>
@@ -281,6 +298,7 @@ export default function CommunityPageClient() {
                   questions.map((question) => {
                     const questionAnswers = answersByQuestion[question.id] ?? [];
                     const answerForm = answerForms[question.id] ?? { name: "", answer: "" };
+                    const replyOpen = Boolean(replyOpenByQuestion[question.id]);
 
                     return (
                       <article className="notice community-card-pro" key={question.id}>
@@ -291,20 +309,30 @@ export default function CommunityPageClient() {
                           </span>
                         </div>
 
-                        <p className="muted">
-                          By {question.authorName || "Guest"} on {new Date(question.createdAt).toLocaleDateString()} {" "}
-                          {question.status !== "approved" ? `| status: ${question.status}` : ""}
-                        </p>
+                        <div className="community-question-author">
+                          <span className="community-avatar">{getInitials(question.authorName || "Guest")}</span>
+                          <div>
+                            <p className="community-author-line">{question.authorName || "Guest"} asked this question</p>
+                            <p className="muted">
+                              {new Date(question.createdAt).toLocaleDateString()} {question.status !== "approved" ? `| status: ${question.status}` : ""}
+                            </p>
+                          </div>
+                        </div>
 
                         <div className="community-answers">
                           {questionAnswers.length ? (
                             questionAnswers.map((answer) => (
                               <div className="community-answer" key={answer.id}>
-                                <p>{answer.answer}</p>
-                                <p className="muted">
-                                  By {answer.authorName || "Guest"} on {new Date(answer.createdAt).toLocaleDateString()} {" "}
-                                  {answer.status !== "approved" ? `| status: ${answer.status}` : ""}
-                                </p>
+                                <div className="community-answer-head">
+                                  <span className="community-avatar small">{getInitials(answer.authorName || "Guest")}</span>
+                                  <div>
+                                    <p className="community-author-line">{answer.authorName || "Guest"} replied</p>
+                                    <p className="muted">
+                                      {new Date(answer.createdAt).toLocaleDateString()} {answer.status !== "approved" ? `| status: ${answer.status}` : ""}
+                                    </p>
+                                  </div>
+                                </div>
+                                <p className="community-answer-text">{answer.answer}</p>
                               </div>
                             ))
                           ) : (
@@ -312,33 +340,42 @@ export default function CommunityPageClient() {
                           )}
                         </div>
 
-                        <form className="form-grid community-answer-form" onSubmit={(event) => void handleAnswerSubmit(event, question)}>
-                          <input
-                            placeholder="Your name (optional)"
-                            value={answerForm.name}
-                            onChange={(event) =>
-                              setAnswerForms((prev) => ({
-                                ...prev,
-                                [question.id]: { ...answerForm, name: event.target.value }
-                              }))
-                            }
-                          />
-                          <textarea
-                            rows={2}
-                            placeholder="Write your answer"
-                            value={answerForm.answer}
-                            onChange={(event) =>
-                              setAnswerForms((prev) => ({
-                                ...prev,
-                                [question.id]: { ...answerForm, answer: event.target.value }
-                              }))
-                            }
-                            required
-                          />
-                          <button className="btn btn-outline" type="submit">
-                            Post Answer
+                        <div className="community-reply-toggle-row">
+                          <button className="btn btn-outline community-reply-toggle" type="button" onClick={() => toggleReplyForm(question.id)}>
+                            {replyOpen ? "Hide Reply ^" : "Add Reply v"}
                           </button>
-                        </form>
+                          <span className="muted">{questionAnswers.length} answers</span>
+                        </div>
+
+                        {replyOpen ? (
+                          <form className="form-grid community-answer-form" onSubmit={(event) => void handleAnswerSubmit(event, question)}>
+                            <input
+                              placeholder="Your name (optional)"
+                              value={answerForm.name}
+                              onChange={(event) =>
+                                setAnswerForms((prev) => ({
+                                  ...prev,
+                                  [question.id]: { ...answerForm, name: event.target.value }
+                                }))
+                              }
+                            />
+                            <textarea
+                              rows={3}
+                              placeholder="Write your answer"
+                              value={answerForm.answer}
+                              onChange={(event) =>
+                                setAnswerForms((prev) => ({
+                                  ...prev,
+                                  [question.id]: { ...answerForm, answer: event.target.value }
+                                }))
+                              }
+                              required
+                            />
+                            <button className="btn btn-primary" type="submit">
+                              Post Answer
+                            </button>
+                          </form>
+                        ) : null}
                       </article>
                     );
                   })
@@ -401,3 +438,4 @@ export default function CommunityPageClient() {
     </div>
   );
 }
+

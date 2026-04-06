@@ -839,7 +839,7 @@ export default function AdminPage() {
   if (loading) {
     return (
       <div className="app-shell">
-        <Header onOpenLogin={() => undefined} />
+        <Header />
         <main className="page-main">
           <div className="page-wrap">
             <div className="notice">Checking admin access...</div>
@@ -853,7 +853,7 @@ export default function AdminPage() {
   if (!profile?.isAdmin) {
     return (
       <div className="app-shell">
-        <Header onOpenLogin={() => undefined} />
+        <Header />
         <main className="page-main">
           <div className="page-wrap">
             <div className="notice">Admin access required.</div>
@@ -1829,7 +1829,7 @@ export default function AdminPage() {
 
   return (
     <div className="app-shell">
-      <Header onOpenLogin={() => undefined} />
+      <Header />
       <main className="page-main">
         <div className="admin-layout">
           <div className="label">Admin Panel</div>
@@ -3831,6 +3831,7 @@ export default function AdminPage() {
     </div>
   );
 }
+
 
 
 

@@ -46,11 +46,18 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
         { id: "fallback-paid", name: "Paid Course", slug: "paid-course", order: 3, enabled: true, updatedAt: "" }
       ];
 
+  const sortedTypes = [...enabledTypes].sort((a, b) => a.order - b.order);
+
+  const coursesByType = sortedTypes.reduce<Record<string, typeof courses>>((acc, typeItem) => {
+    acc[typeItem.slug] = courses.filter((course) => course.typeSlug === typeItem.slug);
+    return acc;
+  }, {});
+
   const showAll = !requestedType || requestedType === "basics" || requestedType === "all";
   const filteredCourses = showAll ? courses : courses.filter((item) => item.typeSlug === requestedType);
   const activeTypeLabel = showAll
     ? "Basics (All Courses)"
-    : enabledTypes.find((item) => item.slug === requestedType)?.name ?? requestedType;
+    : sortedTypes.find((item) => item.slug === requestedType)?.name ?? requestedType;
 
   return (
     <div className="app-shell">
@@ -65,45 +72,73 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
           <h1 className="h2">Courses and Certification Programs</h1>
           <p className="body-txt">Complete lessons, unlock tests, and download certificates.</p>
 
-          <div className="form-actions" style={{ marginTop: "0.75rem", flexWrap: "wrap" }}>
-            {enabledTypes.map((typeItem) => {
-              const href = `/courses?type=${encodeURIComponent(typeItem.slug)}`;
-              const active = (showAll && typeItem.slug === "basics") || (!showAll && typeItem.slug === requestedType);
-              return (
-                <Link
-                  key={`course-type-link-${typeItem.id}`}
-                  href={href}
-                  className={`btn ${active ? "btn-primary" : "btn-outline"}`}
-                >
-                  {typeItem.slug === "basics" ? "Basics (All)" : typeItem.name}
-                </Link>
-              );
-            })}
-          </div>
+          <div className="courses-page-layout">
+            <aside className="courses-sidebar-tree">
+              {sortedTypes.map((typeItem) => {
+                const typeCourses = coursesByType[typeItem.slug] ?? [];
+                const typeActive = (showAll && typeItem.slug === "basics") || (!showAll && requestedType === typeItem.slug);
+                const typeHref = `/courses?type=${encodeURIComponent(typeItem.slug)}`;
 
-          <p className="muted" style={{ marginTop: "0.7rem" }}>
-            Showing: <strong>{activeTypeLabel}</strong>
-          </p>
+                return (
+                  <div key={`sidebar-type-${typeItem.id}`} className="courses-type-block">
+                    <Link href={typeHref} className={`courses-type-link ${typeActive ? "active" : ""}`}>
+                      {typeItem.slug === "basics" ? "Basics (All)" : typeItem.name}
+                    </Link>
 
-          <div className="card-grid courses-page-grid" style={{ marginTop: "1.1rem" }}>
-            {filteredCourses.length ? (
-              filteredCourses.map((item) => (
-                <article className="post-card" key={item.id}>
-                  <Image src={safeImage(item.coverImage)} alt={item.title} width={1200} height={700} />
-                  <h3>{item.title}</h3>
-                  <p className="meta">
-                    {item.lessons.length} lessons | Pass mark {item.passingScore}%
-                  </p>
-                  <p className="muted">Type: {item.typeSlug === "basics" ? "Basics" : item.typeSlug}</p>
-                  <p className="muted">{item.description}</p>
-                  <Link href={`/courses/${item.slug}`} className="btn btn-primary" style={{ marginTop: "0.8rem" }}>
-                    Start Course
-                  </Link>
-                </article>
-              ))
-            ) : (
-              <div className="notice courses-empty">No courses available for this type yet.</div>
-            )}
+                    {typeCourses.length ? (
+                      <div className="courses-tree-list">
+                        {typeCourses.map((course) => (
+                          <div key={`sidebar-course-${course.id}`} className="courses-tree-course">
+                            <Link href={`/courses/${course.slug}`} className="courses-tree-course-link">
+                              {course.title}
+                            </Link>
+                            {course.lessons.length ? (
+                              <ul className="courses-tree-sections">
+                                {course.lessons.slice(0, 5).map((lesson) => (
+                                  <li key={`${course.id}-${lesson.id}`}>{lesson.title}</li>
+                                ))}
+                                {course.lessons.length > 5 ? <li>+{course.lessons.length - 5} more sections</li> : null}
+                              </ul>
+                            ) : (
+                              <p className="muted courses-tree-empty">No sections yet</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="muted courses-tree-empty">No courses yet</p>
+                    )}
+                  </div>
+                );
+              })}
+            </aside>
+
+            <div>
+              <p className="muted" style={{ marginTop: "0.2rem" }}>
+                Showing: <strong>{activeTypeLabel}</strong>
+              </p>
+
+              <div className="card-grid courses-page-grid" style={{ marginTop: "1.1rem" }}>
+                {filteredCourses.length ? (
+                  filteredCourses.map((item) => (
+                    <article className="post-card" key={item.id}>
+                      <Image src={safeImage(item.coverImage)} alt={item.title} width={1200} height={700} />
+                      <h3>{item.title}</h3>
+                      <p className="meta">
+                        {item.lessons.length} lessons | Pass mark {item.passingScore}%
+                      </p>
+                      <p className="muted">Type: {item.typeSlug === "basics" ? "Basics" : item.typeSlug}</p>
+                      <p className="muted">{item.description}</p>
+                      <Link href={`/courses/${item.slug}`} className="btn btn-primary" style={{ marginTop: "0.8rem" }}>
+                        Start Course
+                      </Link>
+                    </article>
+                  ))
+                ) : (
+                  <div className="notice courses-empty">No courses available for this type yet.</div>
+                )}
+              </div>
+            </div>
           </div>
         </section>
       </main>

@@ -17,17 +17,21 @@ const AuthContext = createContext<AuthContextShape>({
   loading: true
 });
 
+const DEFAULT_ADMIN_EMAILS = ["webappewm@gmail.com"];
+
 function resolveAdmin(email: string | null): boolean {
   if (!email) {
     return false;
   }
 
-  const adminList = (process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? "")
+  const configuredAdmins = (process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? "")
     .split(",")
     .map((item) => item.trim().toLowerCase())
     .filter(Boolean);
 
-  return adminList.includes(email.toLowerCase());
+  const normalized = email.toLowerCase();
+  const adminSet = new Set([...DEFAULT_ADMIN_EMAILS, ...configuredAdmins]);
+  return adminSet.has(normalized);
 }
 
 export function AuthProvider({ children }: { children: ReactNode }): ReactNode {

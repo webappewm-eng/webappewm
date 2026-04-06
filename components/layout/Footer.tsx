@@ -229,6 +229,7 @@ export function Footer() {
   const [footerLinks, setFooterLinks] = useState<NavigationLink[]>(fallbackFooterLinks);
   const [footerSocialLinks, setFooterSocialLinks] = useState<SocialLink[]>([]);
   const [floatingSocialLinks, setFloatingSocialLinks] = useState<SocialLink[]>([]);
+  const [floatingOpen, setFloatingOpen] = useState(true);
   const [siteSettings, setSiteSettings] = useState(fallbackSiteSettings);
 
   useEffect(() => {
@@ -310,10 +311,20 @@ export function Footer() {
   return (
     <>
       {floatingSocialLinks.length ? (
-        <aside className="social-floating" aria-label="Social media links">
-          {floatingSocialLinks.map((item) => (
-            <SocialItem key={`floating-${item.id}`} item={item} floating />
-          ))}
+        <aside className={`social-floating ${floatingOpen ? "open" : "collapsed"}`} aria-label="Social media links">
+          <button
+            type="button"
+            className="floating-toggle-btn"
+            onClick={() => setFloatingOpen((prev) => !prev)}
+            aria-expanded={floatingOpen}
+            aria-label={floatingOpen ? "Collapse social links" : "Expand social links"}
+            title={floatingOpen ? "Collapse" : "Expand"}
+          >
+            <span className="floating-toggle-arrow" aria-hidden="true">{floatingOpen ? "<" : ">"}</span>
+          </button>
+          {floatingOpen
+            ? floatingSocialLinks.map((item) => <SocialItem key={`floating-${item.id}`} item={item} floating />)
+            : null}
         </aside>
       ) : null}
 
@@ -386,9 +397,18 @@ export function Footer() {
 
         <div className="footer-bottom">
           <span>(c) 2026 Engineer With Me</span>
-          <span>PWA enabled - Firebase powered</span>
+          
         </div>
       </footer>
     </>
   );
 }
+
+
+
+
+
+
+
+
+

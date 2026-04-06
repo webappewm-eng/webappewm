@@ -8,6 +8,17 @@ export function PwaRegister() {
       return;
     }
 
+    // In development, remove old service workers to avoid stale chunk/runtime issues.
+    if (process.env.NODE_ENV !== "production") {
+      navigator.serviceWorker
+        .getRegistrations()
+        .then((registrations) => Promise.all(registrations.map((registration) => registration.unregister())))
+        .catch(() => {
+          // silent fail
+        });
+      return;
+    }
+
     navigator.serviceWorker.register("/sw.js").catch(() => {
       // silent fail for unsupported or blocked environments
     });

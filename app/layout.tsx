@@ -1,4 +1,4 @@
-﻿import type { Metadata } from "next";
+import type { Metadata } from "next";
 import type { CSSProperties, ReactNode } from "react";
 import "./globals.css";
 import { AuthProvider } from "@/components/auth/AuthProvider";
@@ -16,6 +16,12 @@ function toMetadataBase(siteUrl: string): URL {
   }
 }
 
+const sharedIcons: Metadata["icons"] = {
+  icon: [{ url: "/icon.svg", type: "image/svg+xml" }],
+  shortcut: ["/icon.svg"],
+  apple: [{ url: "/icon.svg" }]
+};
+
 export async function generateMetadata(): Promise<Metadata> {
   try {
     const settings = await getSiteSettings();
@@ -28,6 +34,7 @@ export async function generateMetadata(): Promise<Metadata> {
       applicationName: "Engineer With Me",
       keywords: ["blog", "electronics", "engineering", "nextjs", "firebase"],
       metadataBase: toMetadataBase(settings.siteUrl),
+      icons: sharedIcons,
       openGraph: {
         title: settings.defaultSeoTitle,
         description: settings.defaultSeoDescription,
@@ -47,7 +54,8 @@ export async function generateMetadata(): Promise<Metadata> {
       description: "Real Build. Real Code. Real Engineering.",
       applicationName: "Engineer With Me",
       keywords: ["blog", "electronics", "engineering", "nextjs", "firebase"],
-      metadataBase: new URL("https://webappewm.vercel.app")
+      metadataBase: new URL("https://webappewm.vercel.app"),
+      icons: sharedIcons
     };
   }
 }
@@ -79,6 +87,3 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     </html>
   );
 }
-
-
-

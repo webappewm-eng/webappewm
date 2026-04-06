@@ -16,6 +16,18 @@ const nextConfig: NextConfig = {
         hostname: "engineer-with-me-blog.firebasestorage.app"
       }
     ]
+  },
+  async rewrites() {
+    return [
+      {
+        source: "/icons/icon.svg",
+        destination: "/icon.svg"
+      },
+      {
+        source: "/favicon.ico",
+        destination: "/icon.svg"
+      }
+    ];
   }
 };
 

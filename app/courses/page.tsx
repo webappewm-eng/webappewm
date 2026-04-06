@@ -51,11 +51,10 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
     return acc;
   }, {});
 
-  const showAll = !requestedType || requestedType === "basics" || requestedType === "all";
-  const filteredCourses = showAll ? courses : courses.filter((item) => item.typeSlug === requestedType);
-  const activeTypeLabel = showAll
-    ? "Basics (All Courses)"
-    : sortedTypes.find((item) => item.slug === requestedType)?.name ?? requestedType;
+  const hasRequestedType = sortedTypes.some((item) => item.slug === requestedType);
+  const activeTypeSlug = hasRequestedType ? requestedType : "basics";
+  const filteredCourses = courses.filter((item) => item.typeSlug === activeTypeSlug);
+  const activeTypeLabel = sortedTypes.find((item) => item.slug === activeTypeSlug)?.name ?? "Basics";
 
   return (
     <div className="app-shell">
@@ -76,13 +75,13 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
             <aside className="courses-sidebar-tree">
               {sortedTypes.map((typeItem) => {
                 const typeCourses = coursesByType[typeItem.slug] ?? [];
-                const typeActive = (showAll && typeItem.slug === "basics") || (!showAll && requestedType === typeItem.slug);
+                const typeActive = activeTypeSlug === typeItem.slug;
                 const typeHref = `/courses?type=${encodeURIComponent(typeItem.slug)}`;
 
                 return (
                   <div key={`sidebar-type-${typeItem.id}`} className={`courses-type-block ${typeActive ? "active" : "inactive"}`}>
                     <Link href={typeHref} className={`courses-type-link ${typeActive ? "active" : "inactive"}`}>
-                      {typeItem.slug === "basics" ? "Basics (All)" : typeItem.name}
+                      {typeItem.name}
                     </Link>
 
                     {typeCourses.length ? (
@@ -146,5 +145,7 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
     </div>
   );
 }
+
+
 
 

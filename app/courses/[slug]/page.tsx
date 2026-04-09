@@ -1,10 +1,11 @@
-import type { Metadata } from "next";
+﻿import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
 import { CourseDetailClient } from "@/components/courses/CourseDetailClient";
+import { getSiteSettings } from "@/lib/firebase/data";
 import { getCachedCourseAds, getCachedPublishedCourses } from "@/lib/server/page-cache";
 
 export const revalidate = 60;
@@ -65,9 +66,10 @@ export default async function CourseDetailPage({
   const { slug } = await params;
   const normalized = slug.trim().toLowerCase();
 
-  const [courses, courseAds] = await Promise.all([
+  const [courses, courseAds, settings] = await Promise.all([
     getCachedPublishedCourses(),
-    getCachedCourseAds()
+    getCachedCourseAds(),
+    getSiteSettings()
   ]);
 
   const course = courses.find((item) => item.slug.toLowerCase() === normalized) ?? null;
@@ -105,7 +107,13 @@ export default async function CourseDetailPage({
             </div>
           </article>
 
-          <CourseDetailClient course={course} ads={selectedAds} nextCourse={nextCourse} />
+          <CourseDetailClient
+            course={course}
+            ads={selectedAds}
+            nextCourse={nextCourse}
+            previewEnabled={settings.contentPreviewEnabled}
+            previewPercent={settings.contentPreviewPercent}
+          />
         </div>
       </main>
       <Footer />

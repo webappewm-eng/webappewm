@@ -1,8 +1,8 @@
-import { NavigationLink, SiteSettings, SocialLink } from "@/lib/types";
+﻿import { NavigationLink, SiteSettings, SocialLink } from "@/lib/types";
 
 export type SiteChromeSettings = Pick<
   SiteSettings,
-  "themeMode" | "logoMode" | "logoImageUrl" | "logoSize" | "logoTitleLine1" | "logoTitleLine2" | "logoAccentText"
+  "themeMode" | "logoMode" | "logoImageUrl" | "logoSize" | "logoTitleLine1" | "logoTitleLine2" | "logoAccentText" | "mobileFloatingSocialEnabled" | "mobileFloatingSocialDefaultOpen" | "mobileFloatingSocialPosition"
 >;
 
 export interface SiteBootstrapSnapshot {
@@ -101,7 +101,10 @@ export const fallbackSiteChromeSettings: SiteChromeSettings = {
   logoSize: 38,
   logoTitleLine1: "Engineer",
   logoTitleLine2: "With",
-  logoAccentText: "Me"
+  logoAccentText: "Me",
+  mobileFloatingSocialEnabled: true,
+  mobileFloatingSocialDefaultOpen: true,
+  mobileFloatingSocialPosition: "left-middle"
 };
 
 export const fallbackSiteBootstrapSnapshot: SiteBootstrapSnapshot = {
@@ -112,4 +115,7 @@ export const fallbackSiteBootstrapSnapshot: SiteBootstrapSnapshot = {
   floatingSocialLinks: [],
   visitorCount: 0
 };
+
+
+
 

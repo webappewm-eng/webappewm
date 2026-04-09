@@ -42,6 +42,7 @@ import {
   Category,
   CustomPage,
   Feedback,
+  CourseFeedback,
   HeroMediaItem,
   LivePresence,
   NavigationLink,
@@ -73,6 +74,7 @@ const localStore = {
   subtopics: [...mockSubtopics],
   posts: [...mockPosts],
   feedback: [] as Feedback[],
+  courseFeedback: [] as CourseFeedback[],
   subscriptions: [] as Subscription[],
   customPages: [...mockCustomPages],
   scripts: [...mockThirdPartyScripts],
@@ -166,6 +168,11 @@ function normalizeCommunityStatus(value: unknown): CommunityStatus {
   return "pending";
 }
 
+function looksLikeExternalLink(value: string): boolean {
+  const normalized = value.trim().replace(/^\/+/, "");
+  return /^[a-z0-9.-]+\.[a-z]{2,}(?:[/:?#].*)?$/i.test(normalized);
+}
+
 function normalizeOptionalLink(value: unknown): string {
   const next = String(value ?? "").trim();
   if (!next) {
@@ -176,8 +183,13 @@ function normalizeOptionalLink(value: unknown): string {
     return next;
   }
 
+  if (looksLikeExternalLink(next)) {
+    return normalizeUrl(next.replace(/^\/+/, ""));
+  }
+
   return next.startsWith("/") ? next : `/${next}`;
 }
+
 function normalizeUrl(value: unknown): string {
   const next = String(value ?? "").trim();
   if (!next) {
@@ -194,6 +206,7 @@ function normalizeSiteSettings(raw: Partial<SiteSettings> | Record<string, unkno
   const logoSize = clampNumber(Number(raw.logoSize ?? 38) || 38, 26, 80);
   const siteUrl = String(raw.siteUrl ?? "https://webappewm.vercel.app").trim();
   const layoutSideGap = clampNumber(Number(raw.layoutSideGap ?? 32) || 32, 8, 96);
+  const mobileFloatingPosition = raw.mobileFloatingSocialPosition === "right-bottom" ? "right-bottom" : "left-middle";
 
   return {
     id: String(raw.id ?? "global"),
@@ -208,6 +221,9 @@ function normalizeSiteSettings(raw: Partial<SiteSettings> | Record<string, unkno
     logoTitleLine1: String(raw.logoTitleLine1 ?? "Engineer").trim() || "Engineer",
     logoTitleLine2: String(raw.logoTitleLine2 ?? "With").trim() || "With",
     logoAccentText: String(raw.logoAccentText ?? "Me").trim() || "Me",
+    mobileFloatingSocialEnabled: raw.mobileFloatingSocialEnabled !== false,
+    mobileFloatingSocialDefaultOpen: raw.mobileFloatingSocialDefaultOpen !== false,
+    mobileFloatingSocialPosition: mobileFloatingPosition,
     communityApprovalEnabled: raw.communityApprovalEnabled !== false,
     contentPreviewEnabled: raw.contentPreviewEnabled !== false,
     contentPreviewPercent: previewPercent,
@@ -447,6 +463,49 @@ export async function getFeedback(postId?: string): Promise<Feedback[]> {
     };
   });
 }
+
+export async function saveCourseFeedback(payload: Omit<CourseFeedback, "id" | "createdAt">): Promise<void> {
+  const body = {
+    ...payload,
+    createdAt: new Date().toISOString()
+  };
+
+  if (!hasFirebaseConfig || !db) {
+    localStore.courseFeedback.unshift({ id: `course-fb-${Date.now()}`, ...body });
+    return;
+  }
+
+  await addDoc(collection(db, "course_feedback"), {
+    ...payload,
+    createdAt: serverTimestamp()
+  });
+}
+
+export async function getCourseFeedback(courseId?: string): Promise<CourseFeedback[]> {
+  if (!hasFirebaseConfig || !db) {
+    const rows = courseId ? localStore.courseFeedback.filter((item) => item.courseId === courseId) : localStore.courseFeedback;
+    return sortByDateDesc(rows);
+  }
+
+  const base = collection(db, "course_feedback");
+  const feedbackQuery = courseId
+    ? query(base, where("courseId", "==", courseId), orderBy("createdAt", "desc"))
+    : query(base, orderBy("createdAt", "desc"));
+
+  const snap = await getDocs(feedbackQuery);
+  return snap.docs.map((item) => {
+    const data = item.data() as Record<string, unknown>;
+    return {
+      id: item.id,
+      courseId: String(data.courseId ?? ""),
+      userId: String(data.userId ?? ""),
+      userEmail: String(data.userEmail ?? ""),
+      rating: Number(data.rating ?? 0),
+      message: String(data.message ?? ""),
+      createdAt: normalizeDate(data.createdAt)
+    };
+  });
+}
 export async function createCategory(input: Omit<Category, "id">): Promise<void> {
   if (!hasFirebaseConfig || !db) {
     localStore.categories.push({ id: `cat-${Date.now()}`, ...input });
@@ -538,7 +597,7 @@ export async function deletePost(id: string): Promise<void> {
 export async function getCustomPages(includeDrafts = false): Promise<CustomPage[]> {
   if (!hasFirebaseConfig || !db) {
     const rows = includeDrafts ? localStore.customPages : localStore.customPages.filter((item) => item.isPublished);
-    return sortByDateDesc(rows);
+    return sortByDateDesc(rows.map((item) => ({ ...item, routeMode: item.routeMode === "direct" ? "direct" : "pages" })));
   }
 
   const constraints: QueryConstraint[] = [];
@@ -554,6 +613,7 @@ export async function getCustomPages(includeDrafts = false): Promise<CustomPage[
       id: item.id,
       title: String(data.title ?? ""),
       slug: String(data.slug ?? ""),
+      routeMode: data.routeMode === "direct" ? "direct" : "pages",
       content: String(data.content ?? ""),
       contentMode: data.contentMode === "design" ? "design" : "text",
       designHtml: String(data.designHtml ?? ""),
@@ -568,9 +628,16 @@ export async function getCustomPages(includeDrafts = false): Promise<CustomPage[
     };
   });
 }
-export async function getCustomPageBySlug(slug: string): Promise<CustomPage | null> {
+
+export async function getCustomPageBySlug(slug: string, routeMode: CustomPage["routeMode"] = "pages"): Promise<CustomPage | null> {
+  const normalizedRouteMode = routeMode === "direct" ? "direct" : "pages";
+
   if (!hasFirebaseConfig || !db) {
-    return localStore.customPages.find((item) => item.slug === slug && item.isPublished) ?? null;
+    return (
+      localStore.customPages.find(
+        (item) => item.slug === slug && item.isPublished && (item.routeMode === "direct" ? "direct" : "pages") === normalizedRouteMode
+      ) ?? null
+    );
   }
 
   const snap = await getDocs(query(collection(db, "custom_pages"), where("slug", "==", slug), where("isPublished", "==", true)));
@@ -578,12 +645,22 @@ export async function getCustomPageBySlug(slug: string): Promise<CustomPage | nu
     return null;
   }
 
-  const item = snap.docs[0];
-  const data = item.data() as Record<string, unknown>;
+  const matchedDoc =
+    snap.docs.find((entry) => {
+      const data = entry.data() as Record<string, unknown>;
+      return (data.routeMode === "direct" ? "direct" : "pages") === normalizedRouteMode;
+    }) ?? null;
+
+  if (!matchedDoc) {
+    return null;
+  }
+
+  const data = matchedDoc.data() as Record<string, unknown>;
   return {
-    id: item.id,
+    id: matchedDoc.id,
     title: String(data.title ?? ""),
     slug: String(data.slug ?? ""),
+    routeMode: data.routeMode === "direct" ? "direct" : "pages",
     content: String(data.content ?? ""),
     contentMode: data.contentMode === "design" ? "design" : "text",
     designHtml: String(data.designHtml ?? ""),
@@ -599,8 +676,10 @@ export async function getCustomPageBySlug(slug: string): Promise<CustomPage | nu
 }
 
 export async function createCustomPage(input: Omit<CustomPage, "id" | "updatedAt">): Promise<void> {
-  const payload = {
+  const routeMode: "pages" | "direct" = input.routeMode === "direct" ? "direct" : "pages";
+  const payload: Omit<CustomPage, "id"> = {
     ...input,
+    routeMode,
     updatedAt: new Date().toISOString()
   };
 
@@ -611,24 +690,30 @@ export async function createCustomPage(input: Omit<CustomPage, "id" | "updatedAt
 
   await addDoc(collection(db, "custom_pages"), {
     ...input,
+    routeMode,
     updatedAt: serverTimestamp()
   });
 }
 
 export async function updateCustomPage(id: string, input: Partial<Omit<CustomPage, "id" | "updatedAt">>): Promise<void> {
+  const normalizedRouteMode = input.routeMode !== undefined ? (input.routeMode === "direct" ? "direct" : "pages") : undefined;
+  const patch: Partial<Omit<CustomPage, "id" | "updatedAt">> = {
+    ...input,
+    ...(normalizedRouteMode ? { routeMode: normalizedRouteMode } : {})
+  };
+
   if (!hasFirebaseConfig || !db) {
     localStore.customPages = localStore.customPages.map((item) =>
-      item.id === id ? { ...item, ...input, updatedAt: new Date().toISOString() } : item
+      item.id === id ? { ...item, ...patch, updatedAt: new Date().toISOString() } : item
     );
     return;
   }
 
   await updateDoc(doc(db, "custom_pages", id), {
-    ...input,
+    ...patch,
     updatedAt: serverTimestamp()
   });
 }
-
 export async function deleteCustomPage(id: string): Promise<void> {
   if (!hasFirebaseConfig || !db) {
     localStore.customPages = localStore.customPages.filter((item) => item.id !== id);
@@ -1209,6 +1294,9 @@ export async function updateSiteAppearanceSettings(input: Partial<{
   logoTitleLine1: string;
   logoTitleLine2: string;
   logoAccentText: string;
+  mobileFloatingSocialEnabled: boolean;
+  mobileFloatingSocialDefaultOpen: boolean;
+  mobileFloatingSocialPosition: SiteSettings["mobileFloatingSocialPosition"];
   communityApprovalEnabled: boolean;
   contentPreviewEnabled: boolean;
   contentPreviewPercent: number;
@@ -1244,6 +1332,9 @@ export async function updateSiteAppearanceSettings(input: Partial<{
       logoTitleLine1: normalized.logoTitleLine1,
       logoTitleLine2: normalized.logoTitleLine2,
       logoAccentText: normalized.logoAccentText,
+      mobileFloatingSocialEnabled: normalized.mobileFloatingSocialEnabled,
+      mobileFloatingSocialDefaultOpen: normalized.mobileFloatingSocialDefaultOpen,
+      mobileFloatingSocialPosition: normalized.mobileFloatingSocialPosition,
       communityApprovalEnabled: normalized.communityApprovalEnabled,
       contentPreviewEnabled: normalized.contentPreviewEnabled,
       contentPreviewPercent: normalized.contentPreviewPercent,
@@ -1612,6 +1703,12 @@ function mapCourseDoc(data: Record<string, unknown>, id: string): Course {
     adIds: Array.isArray(data.adIds)
       ? (data.adIds as unknown[]).map((item) => sanitizeString(item)).filter(Boolean)
       : [],
+    feedbackEnabled: data.feedbackEnabled === true,
+    customLandingEnabled: data.customLandingEnabled === true,
+    customLandingSlug: sanitizeString(data.customLandingSlug),
+    landingHtml: String(data.landingHtml ?? ""),
+    landingCss: String(data.landingCss ?? ""),
+    landingJs: String(data.landingJs ?? ""),
     isPublished: Boolean(data.isPublished),
     updatedAt: normalizeDate(data.updatedAt)
   };
@@ -1851,7 +1948,13 @@ function normalizeCourseInput(input: Partial<Omit<Course, "id" | "updatedAt">>):
     ...(typeof input.templateId === "string" ? { templateId: sanitizeString(input.templateId) } : {}),
     ...(input.typeSlug !== undefined ? { typeSlug: normalizeCourseTypeSlug(input.typeSlug) } : {}),
     ...(input.adsEnabled !== undefined ? { adsEnabled: input.adsEnabled === true } : {}),
-    ...(input.adIds !== undefined ? { adIds: normalizeCourseAdIds(input.adIds) } : {})
+    ...(input.adIds !== undefined ? { adIds: normalizeCourseAdIds(input.adIds) } : {}),
+    ...(input.feedbackEnabled !== undefined ? { feedbackEnabled: input.feedbackEnabled === true } : {}),
+    ...(input.customLandingEnabled !== undefined ? { customLandingEnabled: input.customLandingEnabled === true } : {}),
+    ...(typeof input.customLandingSlug === "string" ? { customLandingSlug: sanitizeString(input.customLandingSlug).toLowerCase() } : {}),
+    ...(input.landingHtml !== undefined ? { landingHtml: String(input.landingHtml ?? "") } : {}),
+    ...(input.landingCss !== undefined ? { landingCss: String(input.landingCss ?? "") } : {}),
+    ...(input.landingJs !== undefined ? { landingJs: String(input.landingJs ?? "") } : {})
   };
 
   if (Array.isArray(input.lessons)) {
@@ -2055,7 +2158,8 @@ export async function updateCourseAd(
     ...(typeof input.title === "string" ? { title: sanitizeString(input.title) } : {}),
     ...(typeof input.source === "string" ? { source: sanitizeString(input.source) } : {}),
     ...(typeof input.redirectUrl === "string" ? { redirectUrl: normalizeOptionalLink(input.redirectUrl) } : {}),
-    ...(input.code !== undefined ? { code: String(input.code ?? "") } : {})
+    ...(input.code !== undefined ? { code: String(input.code ?? "") } : {}),
+    ...(typeof input.enabled === "boolean" ? { enabled: input.enabled } : {})
   };
 
   if (!hasFirebaseConfig || !db) {
@@ -2119,6 +2223,12 @@ export async function createCourse(input: Omit<Course, "id" | "updatedAt">): Pro
     questions: (normalized.questions ?? []) as Course["questions"],
     adsEnabled: normalized.adsEnabled === true,
     adIds: normalizeCourseAdIds(normalized.adIds),
+    feedbackEnabled: normalized.feedbackEnabled === true,
+    customLandingEnabled: normalized.customLandingEnabled === true,
+    customLandingSlug: sanitizeString(normalized.customLandingSlug).toLowerCase(),
+    landingHtml: String(normalized.landingHtml ?? ""),
+    landingCss: String(normalized.landingCss ?? ""),
+    landingJs: String(normalized.landingJs ?? ""),
     isPublished: normalized.isPublished === true,
     updatedAt: new Date().toISOString()
   };
@@ -2816,26 +2926,33 @@ export async function getCommunityQuestionsForPublic(filters?: {
   categoryId?: string;
   search?: string;
 }): Promise<CommunityQuestion[]> {
-  const [settings, rows] = await Promise.all([
-    getSiteSettings(),
-    (async () => {
-      if (!hasFirebaseConfig || !db) {
-        return [...localStore.communityQuestions];
-      }
-      const snap = await getDocs(collection(db, "community_questions"));
-      return snap.docs.map((item) => mapCommunityQuestionDoc(item.data() as Record<string, unknown>, item.id));
-    })()
-  ]);
+  const settings = await getSiteSettings();
 
-  let filtered = rows;
+  if (!hasFirebaseConfig || !db) {
+    let filtered = [...localStore.communityQuestions];
+    if (filters?.categoryId) {
+      filtered = filtered.filter((item) => item.categoryId === filters.categoryId);
+    }
+    if (settings.communityApprovalEnabled) {
+      filtered = filtered.filter((item) => item.status === "approved");
+    }
+    return sortByDateDesc(filterCommunityBySearch(filtered, filters?.search ?? ""));
+  }
+
+  const constraints: QueryConstraint[] = [];
   if (filters?.categoryId) {
-    filtered = filtered.filter((item) => item.categoryId === filters.categoryId);
+    constraints.push(where("categoryId", "==", filters.categoryId));
   }
   if (settings.communityApprovalEnabled) {
-    filtered = filtered.filter((item) => item.status === "approved");
+    constraints.push(where("status", "==", "approved"));
   }
 
-  return sortByDateDesc(filterCommunityBySearch(filtered, filters?.search ?? ""));
+  const snap = constraints.length
+    ? await getDocs(query(collection(db, "community_questions"), ...constraints))
+    : await getDocs(collection(db, "community_questions"));
+
+  const rows = snap.docs.map((item) => mapCommunityQuestionDoc(item.data() as Record<string, unknown>, item.id));
+  return sortByDateDesc(filterCommunityBySearch(rows, filters?.search ?? ""));
 }
 
 export async function getCommunityAnswersForPublic(filters?: {
@@ -2843,29 +2960,39 @@ export async function getCommunityAnswersForPublic(filters?: {
   categoryId?: string;
   search?: string;
 }): Promise<CommunityAnswer[]> {
-  const [settings, rows] = await Promise.all([
-    getSiteSettings(),
-    (async () => {
-      if (!hasFirebaseConfig || !db) {
-        return [...localStore.communityAnswers];
-      }
-      const snap = await getDocs(collection(db, "community_answers"));
-      return snap.docs.map((item) => mapCommunityAnswerDoc(item.data() as Record<string, unknown>, item.id));
-    })()
-  ]);
+  const settings = await getSiteSettings();
 
-  let filtered = rows;
+  if (!hasFirebaseConfig || !db) {
+    let filtered = [...localStore.communityAnswers];
+    if (filters?.questionId) {
+      filtered = filtered.filter((item) => item.questionId === filters.questionId);
+    }
+    if (filters?.categoryId) {
+      filtered = filtered.filter((item) => item.categoryId === filters.categoryId);
+    }
+    if (settings.communityApprovalEnabled) {
+      filtered = filtered.filter((item) => item.status === "approved");
+    }
+    return sortByDateDesc(filterCommunityBySearch(filtered, filters?.search ?? ""));
+  }
+
+  const constraints: QueryConstraint[] = [];
   if (filters?.questionId) {
-    filtered = filtered.filter((item) => item.questionId === filters.questionId);
+    constraints.push(where("questionId", "==", filters.questionId));
   }
   if (filters?.categoryId) {
-    filtered = filtered.filter((item) => item.categoryId === filters.categoryId);
+    constraints.push(where("categoryId", "==", filters.categoryId));
   }
   if (settings.communityApprovalEnabled) {
-    filtered = filtered.filter((item) => item.status === "approved");
+    constraints.push(where("status", "==", "approved"));
   }
 
-  return sortByDateDesc(filterCommunityBySearch(filtered, filters?.search ?? ""));
+  const snap = constraints.length
+    ? await getDocs(query(collection(db, "community_answers"), ...constraints))
+    : await getDocs(collection(db, "community_answers"));
+
+  const rows = snap.docs.map((item) => mapCommunityAnswerDoc(item.data() as Record<string, unknown>, item.id));
+  return sortByDateDesc(filterCommunityBySearch(rows, filters?.search ?? ""));
 }
 
 export async function getCommunityQuestionsForAdmin(): Promise<CommunityQuestion[]> {
@@ -3049,6 +3176,33 @@ export async function getVisitorCountryAnalyticsByDate(date: string): Promise<Ar
     .map(([country, count]) => ({ country, count }))
     .sort((a, b) => b.count - a.count || a.country.localeCompare(b.country));
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

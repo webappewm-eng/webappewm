@@ -111,10 +111,15 @@ export default function CommunityPageClient({
   }
 
   useEffect(() => {
+    if (initialCategories.length || initialQuestions.length || initialAnswers.length) {
+      setLoading(false);
+      return;
+    }
+
     async function load() {
       try {
         await refreshAll(undefined, undefined, {
-          showLoader: initialCategories.length === 0 && initialQuestions.length === 0 && initialAnswers.length === 0
+          showLoader: true
         });
       } catch {
         setStatus("Community data could not be loaded right now.");
@@ -255,9 +260,7 @@ export default function CommunityPageClient({
     <div className="app-shell">
       <Header />
       <main className="page-main">
-        <section className="section community-shell">
-          <div className="label">Community</div>
-
+        <section className="community-page-shell community-shell">
           <div className="community-header-row">
             <div>
               <h1 className="h2">Ask and answer together</h1>
@@ -468,6 +471,7 @@ export default function CommunityPageClient({
     </div>
   );
 }
+
 
 
 

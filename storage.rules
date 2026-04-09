@@ -1,10 +1,21 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    function isAdmin() {
-      return request.auth != null
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdminEmail() {
+      return isSignedIn()
         && request.auth.token.email is string
         && request.auth.token.email == "webappewm@gmail.com";
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.admin == true
+        || isAdminEmail()
+      );
     }
 
     match /{allPaths=**} {

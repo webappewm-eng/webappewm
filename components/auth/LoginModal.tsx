@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { loginWithEmail, registerWithEmail } from "@/lib/firebase/auth";
+import { loginWithEmail, loginWithGoogle, registerWithEmail } from "@/lib/firebase/auth";
 
 interface LoginModalProps {
   open: boolean;
@@ -40,6 +40,22 @@ export function LoginModal({ open, onClose }: LoginModalProps) {
     }
   }
 
+  async function handleGoogleLogin() {
+    setError("");
+    setLoading(true);
+
+    try {
+      await loginWithGoogle();
+      onClose();
+      setEmail("");
+      setPassword("");
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Google login failed");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <div className="modal-backdrop" role="presentation" onClick={onClose}>
       <div
@@ -51,6 +67,12 @@ export function LoginModal({ open, onClose }: LoginModalProps) {
       >
         <h3>{mode === "login" ? "Login to Unlock Full Content" : "Create Your Account"}</h3>
         <p>Free preview is capped at 20%. Sign in to continue reading full posts and submit feedback.</p>
+
+        <div className="form-actions" style={{ marginBottom: "0.85rem" }}>
+          <button type="button" className="btn btn-outline" onClick={() => void handleGoogleLogin()} disabled={loading}>
+            {loading ? "Please wait..." : "Continue with Google"}
+          </button>
+        </div>
 
         <form className="form-grid" onSubmit={handleSubmit}>
           <input

@@ -1,10 +1,11 @@
-"use client";
+'use client';
 
 import { EmailAuthProvider, reauthenticateWithCredential, updatePassword, updateProfile as updateAuthProfile } from "firebase/auth";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { LoginModal } from "@/components/auth/LoginModal";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { openCertificatePrint } from "@/lib/certificates/print";
+import { logoutUser } from "@/lib/firebase/auth";
 import { auth } from "@/lib/firebase/client";
 import {
   getCertificateTemplates,
@@ -178,7 +179,12 @@ export function AccountPageClient() {
     <>
       <section className="admin-card" style={{ marginBottom: "1rem" }}>
         <div className="label">Profile</div>
-        <h3 style={{ marginTop: "0.35rem" }}>Account Details</h3>
+        <div className="account-card-head">
+          <h3 style={{ marginTop: "0.35rem", marginBottom: 0 }}>Account Details</h3>
+          <button className="btn btn-outline" type="button" onClick={() => void logoutUser()}>
+            Logout
+          </button>
+        </div>
         <form className="form-grid" onSubmit={handleProfileSubmit}>
           <input
             placeholder="Name"

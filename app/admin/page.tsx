@@ -51,6 +51,7 @@ import {
   getCategories,
   getCustomPages,
   getFeedback,
+  getCourseFeedback,
   getPostAnalyticsBreakdown,
   getHeroMediaForAdmin,
   getNotifications,
@@ -105,6 +106,7 @@ import {
   CommunityStatus,
   CustomPage,
   Feedback,
+  CourseFeedback,
   HeroMediaItem,
   NavigationLink,
   NotificationMessage,
@@ -148,6 +150,7 @@ const emptyPostForm = {
 const emptyPageForm = {
   title: "",
   slug: "",
+  routeMode: "pages" as "pages" | "direct",
   contentMode: "text" as "text" | "design",
   content: "",
   designHtml: "",
@@ -185,6 +188,12 @@ const emptyCourseForm = {
   questionsInput: "",
   adsEnabled: false,
   adIds: [] as string[],
+  feedbackEnabled: false,
+  customLandingEnabled: false,
+  customLandingSlug: "landing-page",
+  landingHtml: "",
+  landingCss: "",
+  landingJs: "",
   isPublished: true
 };
 
@@ -568,15 +577,36 @@ function downloadUsersCsv(rows: AdminUserRecord[]): void {
   anchor.click();
   URL.revokeObjectURL(url);
 }
-type AdminTabKey = "general" | "category" | "topics" | "pages" | "seo" | "learning" | "engagement";
+function downloadSubscriptionsCsv(rows: Subscription[]): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const header = "email,topic_id,created_at";
+  const body = rows.map((item) => {
+    const safe = (value: string) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    return [safe(item.email), safe(item.topicId ?? "website"), safe(item.createdAt)].join(",");
+  });
+
+  const csv = [header, ...body].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = "subscribers-export.csv";
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+type AdminTabKey = "general" | "category" | "topics" | "pages" | "seo" | "learning" | "engagement" | "subscribers";
 
 const adminTabs: { key: AdminTabKey; label: string }[] = [
   { key: "general", label: "General" },
   { key: "seo", label: "SEO & Settings" },
   { key: "topics", label: "Topics" },
-  { key: "pages", label: "Pages" },
+  { key: "pages", label: "Landing Pages / Pages" },
   { key: "learning", label: "Learning" },
-  { key: "engagement", label: "Engagement" }
+  { key: "engagement", label: "Engagement" },
+  { key: "subscribers", label: "Subscribers" }
 ];
 export default function AdminPage() {
   const { profile, loading } = useAuth();
@@ -585,6 +615,7 @@ export default function AdminPage() {
   const [subtopics, setSubtopics] = useState<Subtopic[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
   const [feedback, setFeedback] = useState<Feedback[]>([]);
+  const [courseFeedbackRows, setCourseFeedbackRows] = useState<CourseFeedback[]>([]);
   const [pages, setPages] = useState<CustomPage[]>([]);
   const [landingTopics, setLandingTopics] = useState<LandingTopic[]>([]);
   const [scripts, setScripts] = useState<ThirdPartyScript[]>([]);
@@ -634,6 +665,9 @@ export default function AdminPage() {
     logoTitleLine1: "Engineer",
     logoTitleLine2: "With",
     logoAccentText: "Me",
+    mobileFloatingSocialEnabled: true,
+    mobileFloatingSocialDefaultOpen: true,
+    mobileFloatingSocialPosition: "left-middle" as SiteSettings["mobileFloatingSocialPosition"],
     communityApprovalEnabled: true,
     contentPreviewEnabled: true,
     contentPreviewPercent: 20,
@@ -691,6 +725,9 @@ export default function AdminPage() {
     logoTitleLine1: "Engineer",
     logoTitleLine2: "With",
     logoAccentText: "Me",
+    mobileFloatingSocialEnabled: true,
+    mobileFloatingSocialDefaultOpen: true,
+    mobileFloatingSocialPosition: "left-middle" as SiteSettings["mobileFloatingSocialPosition"],
     communityApprovalEnabled: true,
     contentPreviewEnabled: true,
     contentPreviewPercent: "20",
@@ -765,6 +802,26 @@ export default function AdminPage() {
       pageEditingId
   );
 
+  const customCourseLandingPreviewPath = useMemo(() => {
+    const courseSlug = slugify(courseForm.slug || courseForm.title || "course") || "course";
+    const landingSlug = slugify(courseForm.customLandingSlug || "landing-page") || "landing-page";
+    return `/courses/${courseSlug}/${landingSlug}`;
+  }, [courseForm.slug, courseForm.title, courseForm.customLandingSlug]);
+
+  const previewBaseOrigin = useMemo(() => {
+    const value = (appearanceForm.siteUrl || siteOrigin).trim();
+    return value.replace(/\/+$/, "");
+  }, [appearanceForm.siteUrl, siteOrigin]);
+
+  const customCourseLandingPreviewUrl = previewBaseOrigin ? `${previewBaseOrigin}${customCourseLandingPreviewPath}` : customCourseLandingPreviewPath;
+
+  const customPagePreviewPath = useMemo(() => {
+    const slug = slugify(pageForm.slug || pageForm.title || "page") || "page";
+    return pageForm.routeMode === "direct" ? `/${slug}` : `/pages/${slug}`;
+  }, [pageForm.routeMode, pageForm.slug, pageForm.title]);
+
+  const customPagePreviewUrl = previewBaseOrigin ? `${previewBaseOrigin}${customPagePreviewPath}` : customPagePreviewPath;
+
   function closeInlineEditPopups() {
     setCategoryEditingId("");
     setSubtopicEditingId("");
@@ -812,6 +869,7 @@ export default function AdminPage() {
       nextSubtopics,
       nextPosts,
       nextFeedback,
+      nextCourseFeedback,
       nextPages,
       nextLandingTopics,
       nextScripts,
@@ -841,6 +899,7 @@ export default function AdminPage() {
       getSubtopics(),
       getPosts({ includeDrafts: true }),
       getFeedback(),
+      getCourseFeedback(),
       getCustomPages(true),
       getLandingTopics(true),
       getThirdPartyScripts(),
@@ -871,6 +930,7 @@ export default function AdminPage() {
     setSubtopics(nextSubtopics);
     setPosts(nextPosts);
     setFeedback(nextFeedback);
+    setCourseFeedbackRows(nextCourseFeedback);
     setPages(nextPages);
     setLandingTopics(nextLandingTopics);
     setScripts(nextScripts);
@@ -924,6 +984,9 @@ export default function AdminPage() {
       logoTitleLine1: nextSettings.logoTitleLine1,
       logoTitleLine2: nextSettings.logoTitleLine2,
       logoAccentText: nextSettings.logoAccentText,
+      mobileFloatingSocialEnabled: nextSettings.mobileFloatingSocialEnabled,
+      mobileFloatingSocialDefaultOpen: nextSettings.mobileFloatingSocialDefaultOpen,
+      mobileFloatingSocialPosition: nextSettings.mobileFloatingSocialPosition,
       communityApprovalEnabled: nextSettings.communityApprovalEnabled,
       contentPreviewEnabled: nextSettings.contentPreviewEnabled,
       contentPreviewPercent: String(nextSettings.contentPreviewPercent),
@@ -1240,17 +1303,24 @@ export default function AdminPage() {
       }
     }
 
+    const slug = slugify(pageForm.slug || pageForm.title);
+    const routeMode: "pages" | "direct" = pageForm.routeMode === "direct" ? "direct" : "pages";
+    const path = routeMode === "direct" ? `/${slug}` : `/pages/${slug}`;
+    const exactUrl = previewBaseOrigin ? `${previewBaseOrigin}${path}` : path;
     const payload = {
       ...pageForm,
-      slug: slugify(pageForm.slug || pageForm.title)
+      routeMode,
+      slug,
+      showHeader: pageForm.contentMode === "text" ? pageForm.showHeader : false,
+      showFooter: pageForm.contentMode === "text" ? pageForm.showFooter : false
     };
 
     if (pageEditingId) {
       await updateCustomPage(pageEditingId, payload);
-      setStatus("Custom page updated.");
+      setStatus(`Custom page updated: ${exactUrl}`);
     } else {
       await createCustomPage(payload);
-      setStatus("Custom page created.");
+      setStatus(`Custom page created: ${exactUrl}`);
     }
 
     setPageForm(emptyPageForm);
@@ -1401,7 +1471,14 @@ export default function AdminPage() {
     try {
       const url = await uploadSiteAsset(file);
       setHeroForm((prev) => ({ ...prev, source: url }));
-      setUploadStatus("Hero media uploaded.");
+
+      if (heroEditingId) {
+        await updateHeroMedia(heroEditingId, { source: url });
+        await refreshAll();
+        setUploadStatus("Hero media uploaded and saved.");
+      } else {
+        setUploadStatus("Hero media uploaded.");
+      }
     } catch {
       setUploadStatus("Hero media upload failed.");
     } finally {
@@ -1534,6 +1611,9 @@ export default function AdminPage() {
       logoTitleLine1: appearanceForm.logoTitleLine1,
       logoTitleLine2: appearanceForm.logoTitleLine2,
       logoAccentText: appearanceForm.logoAccentText,
+      mobileFloatingSocialEnabled: appearanceForm.mobileFloatingSocialEnabled,
+      mobileFloatingSocialDefaultOpen: appearanceForm.mobileFloatingSocialDefaultOpen,
+      mobileFloatingSocialPosition: appearanceForm.mobileFloatingSocialPosition,
       communityApprovalEnabled: appearanceForm.communityApprovalEnabled,
       contentPreviewEnabled: appearanceForm.contentPreviewEnabled,
       contentPreviewPercent: Number(appearanceForm.contentPreviewPercent || "20"),
@@ -2097,6 +2177,34 @@ export default function AdminPage() {
     }
   }
 
+  async function handleCourseAdAssetUpload(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    setUploadingImage(true);
+    setUploadStatus("");
+
+    try {
+      const url = await uploadSiteAsset(file);
+      setCourseAdForm((prev) => ({ ...prev, source: url }));
+
+      if (courseAdEditingId) {
+        await updateCourseAd(courseAdEditingId, { source: url });
+        await refreshAll();
+        setUploadStatus("Course ad media uploaded and saved.");
+      } else {
+        setUploadStatus("Course ad media uploaded.");
+      }
+    } catch {
+      setUploadStatus("Course ad media upload failed.");
+    } finally {
+      setUploadingImage(false);
+      event.target.value = "";
+    }
+  }
+
   async function handleCourseSectionsImport(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
     if (!file) {
@@ -2278,6 +2386,12 @@ export default function AdminPage() {
       questions,
       adsEnabled: courseForm.adsEnabled,
       adIds: courseForm.adIds,
+      feedbackEnabled: courseForm.feedbackEnabled,
+      customLandingEnabled: courseForm.customLandingEnabled,
+      customLandingSlug: slugify(courseForm.customLandingSlug || "landing-page") || "landing-page",
+      landingHtml: courseForm.landingHtml,
+      landingCss: courseForm.landingCss,
+      landingJs: courseForm.landingJs,
       isPublished: courseForm.isPublished
     };
 
@@ -2825,7 +2939,7 @@ export default function AdminPage() {
           </section>
           <section className="admin-section admin-card" hidden={!isTabActive("seo")}>
             <h3>Theme, Logo, Preview and SEO Settings</h3>
-            <p className="muted">Manage dark mode, logo, preview gate, Gemini helper and SEO defaults.</p>
+            <p className="muted">Manage theme, logo, mobile floating social settings, course preview gate, and SEO defaults.</p>
             <form className="form-grid" onSubmit={handleAppearanceSubmit}>
               <select
                 value={appearanceForm.themeMode}
@@ -2902,7 +3016,7 @@ export default function AdminPage() {
                     setAppearanceForm((prev) => ({ ...prev, contentPreviewEnabled: event.target.checked }))
                   }
                 />
-                Enable post preview gate before login
+                Enable course preview gate before login
               </label>
               <input
                 type="number"
@@ -2947,21 +3061,38 @@ export default function AdminPage() {
                 />
                 Allow robots indexing
               </label>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={appearanceForm.geminiEnabled}
+              <div className="notice">
+                <strong>Mobile Floating Social Icons</strong>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={appearanceForm.mobileFloatingSocialEnabled}
+                    onChange={(event) =>
+                      setAppearanceForm((prev) => ({ ...prev, mobileFloatingSocialEnabled: event.target.checked }))
+                    }
+                  />
+                  Show floating social icons on mobile
+                </label>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={appearanceForm.mobileFloatingSocialDefaultOpen}
+                    onChange={(event) =>
+                      setAppearanceForm((prev) => ({ ...prev, mobileFloatingSocialDefaultOpen: event.target.checked }))
+                    }
+                  />
+                  Open floating social icons by default on mobile
+                </label>
+                <select
+                  value={appearanceForm.mobileFloatingSocialPosition}
                   onChange={(event) =>
-                    setAppearanceForm((prev) => ({ ...prev, geminiEnabled: event.target.checked }))
+                    setAppearanceForm((prev) => ({ ...prev, mobileFloatingSocialPosition: event.target.value as SiteSettings["mobileFloatingSocialPosition"] }))
                   }
-                />
-                Enable Gemini content tools
-              </label>
-              <input
-                placeholder="Gemini model"
-                value={appearanceForm.geminiModel}
-                onChange={(event) => setAppearanceForm((prev) => ({ ...prev, geminiModel: event.target.value }))}
-              />
+                >
+                  <option value="left-middle">Left middle</option>
+                  <option value="right-bottom">Right bottom</option>
+                </select>
+              </div>
               <button className="btn btn-primary" type="submit">
                 Save Appearance and SEO
               </button>
@@ -3369,148 +3500,6 @@ export default function AdminPage() {
             </div>
           </section>
           <section className="admin-section admin-card" hidden={!isTabActive("learning")}>
-            <h3>Webinar Management</h3>
-            <p className="muted">Create webinars, generate shortcode automatically, and track registrations.</p>
-            <form className={`form-grid ${webinarEditingId ? "admin-edit-popup-form" : ""}`} onSubmit={handleWebinarSubmit}>
-              <input
-                placeholder="Webinar title"
-                value={webinarForm.title}
-                onChange={(event) => setWebinarForm((prev) => ({ ...prev, title: event.target.value }))}
-                required
-              />
-              <input
-                placeholder="Webinar slug"
-                value={webinarForm.slug}
-                onChange={(event) => setWebinarForm((prev) => ({ ...prev, slug: event.target.value }))}
-                required
-              />
-              <textarea
-                rows={2}
-                placeholder="Webinar description"
-                value={webinarForm.description}
-                onChange={(event) => setWebinarForm((prev) => ({ ...prev, description: event.target.value }))}
-                required
-              />
-              <input
-                placeholder="Banner image URL"
-                value={webinarForm.bannerImage}
-                onChange={(event) => setWebinarForm((prev) => ({ ...prev, bannerImage: event.target.value }))}
-              />
-              <input type="file" accept="image/*" onChange={handleWebinarBannerUpload} />
-              <input
-                type="datetime-local"
-                value={webinarForm.startAt}
-                onChange={(event) => setWebinarForm((prev) => ({ ...prev, startAt: event.target.value }))}
-                required
-              />
-              <input
-                type="datetime-local"
-                value={webinarForm.endAt}
-                onChange={(event) => setWebinarForm((prev) => ({ ...prev, endAt: event.target.value }))}
-                required
-              />
-              <input
-                placeholder="Meeting URL"
-                value={webinarForm.meetingUrl}
-                onChange={(event) => setWebinarForm((prev) => ({ ...prev, meetingUrl: event.target.value }))}
-                required
-              />
-              <label>
-                <input
-                  type="checkbox"
-                  checked={webinarForm.isPublished}
-                  onChange={(event) => setWebinarForm((prev) => ({ ...prev, isPublished: event.target.checked }))}
-                />
-                Published
-              </label>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={webinarForm.showOnHome}
-                  onChange={(event) => setWebinarForm((prev) => ({ ...prev, showOnHome: event.target.checked }))}
-                />
-                Show on home page
-              </label>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={webinarForm.showPublicPage}
-                  onChange={(event) => setWebinarForm((prev) => ({ ...prev, showPublicPage: event.target.checked }))}
-                />
-                Show on webinar listing page
-              </label>
-              <div className="form-actions">
-                <button className="btn btn-primary" type="submit">
-                  {webinarEditingId ? "Update Webinar" : "Create Webinar"}
-                </button>
-                {webinarEditingId ? (
-                  <button
-                    className="btn btn-outline"
-                    type="button"
-                    onClick={() => {
-                      setWebinarEditingId("");
-                      setWebinarForm(emptyWebinarForm);
-                    }}
-                  >
-                    Cancel Edit
-                  </button>
-                ) : null}
-              </div>
-            </form>
-
-            <div className="table-like">
-              {webinars.length ? (
-                webinars.map((item) => (
-                  <article className="notice" key={`admin-webinar-${item.id}`}>
-                    <strong>{item.title}</strong>
-                    <p className="muted">
-                      /webinars/{item.slug} | registrations {registrationsByWebinar[item.id] ?? 0}
-                    </p>
-                    <p className="muted">Shortcode: {item.shortcode}</p>
-                    <div className="form-actions">
-                      <button
-                        className="btn btn-outline"
-                        type="button"
-                        onClick={() => {
-                          const startInput = Number.isNaN(new Date(item.startAt).getTime())
-                            ? ""
-                            : new Date(item.startAt).toISOString().slice(0, 16);
-                          const endInput = Number.isNaN(new Date(item.endAt).getTime())
-                            ? ""
-                            : new Date(item.endAt).toISOString().slice(0, 16);
-
-                          setWebinarEditingId(item.id);
-                          setWebinarForm({
-                            title: item.title,
-                            slug: item.slug,
-                            description: item.description,
-                            bannerImage: item.bannerImage,
-                            startAt: startInput,
-                            endAt: endInput,
-                            meetingUrl: item.meetingUrl,
-                            isPublished: item.isPublished,
-                            showOnHome: item.showOnHome,
-                            showPublicPage: item.showPublicPage
-                          });
-                        }}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        className="btn btn-outline"
-                        type="button"
-                        onClick={() => void deleteWebinar(item.id).then(refreshAll)}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </article>
-                ))
-              ) : (
-                <p className="muted">No webinars created yet.</p>
-              )}
-            </div>
-          </section><section className="admin-section admin-card" hidden={!isTabActive("learning")}>
             <h3>Course Types</h3>
             <p className="muted">Default types are Basics, Free Learning, Paid Course. You can add more types anytime.</p>
             <form className={`form-grid ${courseTypeEditingId ? "admin-edit-popup-form" : ""}`} onSubmit={handleCourseTypeSubmit}>
@@ -3595,7 +3584,7 @@ export default function AdminPage() {
 
           <section className="admin-section admin-card" hidden={!isTabActive("learning")}>
             <h3>Course Ads</h3>
-            <p className="muted">Create ads (image/video/code) and attach them per course.</p>
+            <p className="muted">Create ads (image/video/code) and attach them per course. Recommended size: images 1200x1200, videos 1280x720.</p>
             <form className={`form-grid ${courseAdEditingId ? "admin-edit-popup-form admin-edit-popup-form-wide" : ""}`} onSubmit={handleCourseAdSubmit}>
               <input
                 placeholder="Ad name"
@@ -3632,6 +3621,8 @@ export default function AdminPage() {
                     onChange={(event) => setCourseAdForm((prev) => ({ ...prev, source: event.target.value }))}
                     required
                   />
+                  <input type="file" accept="image/*,video/*" onChange={handleCourseAdAssetUpload} />
+                  <p className="muted">Recommended size: image ads 1200x1200, video ads 1280x720.</p>
                   <input
                     placeholder="Redirect URL (optional)"
                     value={courseAdForm.redirectUrl}
@@ -3717,11 +3708,8 @@ export default function AdminPage() {
               Section format: <code>Section title::Section content</code> per line. Questions format:
               <code>Question||Option A|Option B|Option C||0</code> per line.
             </p>
-            <div className="form-actions" style={{ marginBottom: "0.65rem" }}>
-              <button className="btn btn-outline" type="button" onClick={() => void handleSeedDemoEducationData()}>
-                Seed Demo Data (Topics + Community + Courses)
-              </button>
-            </div>
+
+
             <form className={`form-grid ${courseEditingId ? "admin-edit-popup-form admin-edit-popup-form-wide" : ""}`} onSubmit={handleCourseSubmit}>
               <input
                 placeholder="Course title"
@@ -3761,6 +3749,7 @@ export default function AdminPage() {
                 onChange={(event) => setCourseForm((prev) => ({ ...prev, coverImage: event.target.value }))}
               />
               <input type="file" accept="image/*" onChange={handleCourseCoverUpload} />
+              <p className="muted">Recommended size: 900x900 square cover image.</p>
               <select
                 value={courseForm.templateId}
                 onChange={(event) => setCourseForm((prev) => ({ ...prev, templateId: event.target.value }))}
@@ -3875,6 +3864,41 @@ export default function AdminPage() {
                   </div>
                 ))}
               </div>
+              <div className="notice">
+                <strong>Custom Course Landing Page</strong>
+                <p className="muted" style={{ marginTop: "0.35rem" }}>
+                  Optional direct-deploy HTML/CSS/JS landing page without header and footer.
+                </p>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={courseForm.customLandingEnabled}
+                    onChange={(event) => setCourseForm((prev) => ({ ...prev, customLandingEnabled: event.target.checked }))}
+                  />
+                  Enable custom landing page
+                </label>
+                <input
+                  placeholder="Custom landing slug"
+                  value={courseForm.customLandingSlug}
+                  onChange={(event) => setCourseForm((prev) => ({ ...prev, customLandingSlug: event.target.value }))}
+                />
+                {courseForm.customLandingEnabled ? (
+                  <p className="muted" style={{ margin: "0.35rem 0 0.75rem" }}>
+                    Generated link: <code>{customCourseLandingPreviewUrl}</code>
+                  </p>
+                ) : null}
+                {courseForm.customLandingEnabled ? (
+                  <DesignStudio
+                    title="Course Landing Design Studio"
+                    htmlCode={courseForm.landingHtml}
+                    cssCode={courseForm.landingCss}
+                    jsCode={courseForm.landingJs}
+                    onHtmlCodeChange={(value) => setCourseForm((prev) => ({ ...prev, landingHtml: value }))}
+                    onCssCodeChange={(value) => setCourseForm((prev) => ({ ...prev, landingCss: value }))}
+                    onJsCodeChange={(value) => setCourseForm((prev) => ({ ...prev, landingJs: value }))}
+                  />
+                ) : null}
+              </div>
               <label>
                 <input
                   type="checkbox"
@@ -3882,6 +3906,14 @@ export default function AdminPage() {
                   onChange={(event) => setCourseForm((prev) => ({ ...prev, adsEnabled: event.target.checked }))}
                 />
                 Enable ads on this course page
+              </label>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={courseForm.feedbackEnabled}
+                  onChange={(event) => setCourseForm((prev) => ({ ...prev, feedbackEnabled: event.target.checked }))}
+                />
+                Enable course feedback
               </label>
 
               {courseForm.adsEnabled ? (
@@ -3949,6 +3981,8 @@ export default function AdminPage() {
                     </p>
                     <p className="muted">Template: {templateNameById[item.templateId ?? ""] ?? "none"}</p>
                     <p className="muted">Ads: {item.adsEnabled ? item.adIds.map((id) => courseAdNameById[id] ?? id).join(", ") || "enabled" : "disabled"}</p>
+                    <p className="muted">Feedback: {item.feedbackEnabled ? "enabled" : "disabled"}</p>
+                    <p className="muted">Landing: {item.customLandingEnabled ? `/courses/${item.slug}/${item.customLandingSlug || "landing-page"}` : "disabled"}</p>
                     <div className="form-actions">
                       <button
                         className="btn btn-outline"
@@ -3967,6 +4001,12 @@ export default function AdminPage() {
                             questionsInput: questionsToInput(item.questions),
                             adsEnabled: item.adsEnabled === true,
                             adIds: item.adIds ?? [],
+                            feedbackEnabled: item.feedbackEnabled === true,
+                            customLandingEnabled: item.customLandingEnabled === true,
+                            customLandingSlug: item.customLandingSlug || "landing-page",
+                            landingHtml: item.landingHtml ?? "",
+                            landingCss: item.landingCss ?? "",
+                            landingJs: item.landingJs ?? "",
                             isPublished: item.isPublished
                           });
                           setCourseSectionDrafts(lessonsToSectionDrafts(item.lessons));
@@ -4106,37 +4146,32 @@ export default function AdminPage() {
                   <p className="muted">No certificates issued yet.</p>
                 )}
               </div>
-            </div>
-          </section>
-
-          <section className="admin-section admin-card" hidden={!isTabActive("general")}>
-            <h3>Category Links</h3>
-            <p className="muted">Use these links for sharing category pages.</p>
-            <div className="table-like">
               <div className="notice">
-                <strong>Category links</strong>
-                {categories.length ? (
-                  categories.map((item) => {
-                    const path = `/?category=${encodeURIComponent(item.slug)}#categories`;
-                    const href = `${siteOrigin}${path}`;
-                    return (
-                      <p className="muted" key={`category-link-${item.id}`}>
-                        <a className="nav-link" href={href} target="_blank" rel="noreferrer">{href}</a>
-                      </p>
-                    );
-                  })
+                <strong>Course Feedback ({courseFeedbackRows.length})</strong>
+                {courseFeedbackRows.length ? (
+                  courseFeedbackRows.slice(0, 50).map((item) => (
+                    <p className="muted" key={`course-feedback-${item.id}`}>
+                      {courseTitleById[item.courseId] ?? item.courseId} - {item.userEmail} - rating {item.rating}/5 - {new Date(item.createdAt).toLocaleDateString()}
+                    </p>
+                  ))
                 ) : (
-                  <p className="muted">No categories available.</p>
+                  <p className="muted">No course feedback yet.</p>
                 )}
               </div>
             </div>
           </section>
 
+
           <section className="admin-section admin-card" hidden={!isTabActive("pages")}>
-            <h3>Custom Page Management</h3>
+            <h3>Landing Pages / Pages</h3>
+            <p className="muted">Choose /pages/slug or direct /slug. Design mode deploys directly without header and footer.</p>
             <form className={`form-grid ${pageEditingId ? "admin-edit-popup-form admin-edit-popup-form-wide" : ""}`} onSubmit={handlePageSubmit}>
               <input placeholder="Page title" value={pageForm.title} onChange={(event) => setPageForm((prev) => ({ ...prev, title: event.target.value }))} required />
               <input placeholder="Page slug" value={pageForm.slug} onChange={(event) => setPageForm((prev) => ({ ...prev, slug: event.target.value }))} required />
+              <select value={pageForm.routeMode} onChange={(event) => setPageForm((prev) => ({ ...prev, routeMode: event.target.value as "pages" | "direct" }))}>
+                <option value="pages">Page URL (/pages/slug)</option>
+                <option value="direct">Direct landing URL (/slug)</option>
+              </select>
               <select
                 value={pageForm.contentMode}
                 onChange={(event) => setPageForm((prev) => ({ ...prev, contentMode: event.target.value as "text" | "design" }))}
@@ -4144,21 +4179,33 @@ export default function AdminPage() {
                 <option value="text">Text Content</option>
                 <option value="design">HTML/CSS/JS Design</option>
               </select>
+              <div className="notice">
+                <strong>Generated link</strong>
+                <p className="muted" style={{ marginTop: "0.35rem" }}><code>{customPagePreviewUrl}</code></p>
+              </div>
               {pageForm.contentMode === "text" ? (
-                <textarea rows={7} placeholder="Page content" value={pageForm.content} onChange={(event) => setPageForm((prev) => ({ ...prev, content: event.target.value }))} required />
+                <>
+                  <textarea rows={7} placeholder="Page content" value={pageForm.content} onChange={(event) => setPageForm((prev) => ({ ...prev, content: event.target.value }))} required />
+                  <label><input type="checkbox" checked={pageForm.showHeader} onChange={(event) => setPageForm((prev) => ({ ...prev, showHeader: event.target.checked }))} /> Show header</label>
+                  <label><input type="checkbox" checked={pageForm.showFooter} onChange={(event) => setPageForm((prev) => ({ ...prev, showFooter: event.target.checked }))} /> Show footer</label>
+                </>
               ) : (
-                <DesignStudio
-                  title="Page Design Studio"
-                  htmlCode={pageForm.designHtml}
-                  cssCode={pageForm.designCss}
-                  jsCode={pageForm.designJs}
-                  onHtmlCodeChange={(value) => setPageForm((prev) => ({ ...prev, designHtml: value }))}
-                  onCssCodeChange={(value) => setPageForm((prev) => ({ ...prev, designCss: value }))}
-                  onJsCodeChange={(value) => setPageForm((prev) => ({ ...prev, designJs: value }))}
-                />
+                <>
+                  <div className="notice">
+                    <strong>Design mode</strong>
+                    <p className="muted" style={{ marginTop: "0.35rem" }}>Imported HTML/CSS/JS will render directly with no header or footer.</p>
+                  </div>
+                  <DesignStudio
+                    title="Page Design Studio"
+                    htmlCode={pageForm.designHtml}
+                    cssCode={pageForm.designCss}
+                    jsCode={pageForm.designJs}
+                    onHtmlCodeChange={(value) => setPageForm((prev) => ({ ...prev, designHtml: value }))}
+                    onCssCodeChange={(value) => setPageForm((prev) => ({ ...prev, designCss: value }))}
+                    onJsCodeChange={(value) => setPageForm((prev) => ({ ...prev, designJs: value }))}
+                  />
+                </>
               )}
-              <label><input type="checkbox" checked={pageForm.showHeader} onChange={(event) => setPageForm((prev) => ({ ...prev, showHeader: event.target.checked }))} /> Show header</label>
-              <label><input type="checkbox" checked={pageForm.showFooter} onChange={(event) => setPageForm((prev) => ({ ...prev, showFooter: event.target.checked }))} /> Show footer</label>
               <input placeholder="SEO title" value={pageForm.seoTitle} onChange={(event) => setPageForm((prev) => ({ ...prev, seoTitle: event.target.value }))} />
               <textarea rows={2} placeholder="SEO description" value={pageForm.seoDescription} onChange={(event) => setPageForm((prev) => ({ ...prev, seoDescription: event.target.value }))} />
               <label><input type="checkbox" checked={pageForm.isPublished} onChange={(event) => setPageForm((prev) => ({ ...prev, isPublished: event.target.checked }))} /> Publish page</label>
@@ -4168,16 +4215,22 @@ export default function AdminPage() {
               </div>
             </form>
             <div className="table-like">
-              {pages.map((item) => (
+              <div className="notice">
+                <strong>Pages Links</strong>
+                <p className="muted" style={{ marginTop: "0.35rem" }}>Routes under /pages/slug.</p>
+              </div>
+              {pages.filter((item) => (item.routeMode === "direct" ? "direct" : "pages") === "pages").map((item) => (
                 <div className="notice" key={item.id}>
                   <strong>{item.title}</strong> <span className="muted">(/pages/{item.slug})</span>
                   <p className="muted">{item.isPublished ? "Published" : "Draft"} | {item.contentMode === "design" ? "Design" : "Text"}</p>
+                  <p className="muted">{previewBaseOrigin ? `${previewBaseOrigin}/pages/${item.slug}` : `/pages/${item.slug}`}</p>
                   <div className="form-actions">
                     <button className="btn btn-outline" type="button" onClick={() => {
                       setPageEditingId(item.id);
                       setPageForm({
                         title: item.title,
                         slug: item.slug,
+                        routeMode: item.routeMode === "direct" ? "direct" : "pages",
                         contentMode: item.contentMode === "design" ? "design" : "text",
                         content: item.content,
                         designHtml: item.designHtml ?? "",
@@ -4190,10 +4243,46 @@ export default function AdminPage() {
                         isPublished: item.isPublished
                       });
                     }}>Edit</button>
+                    <a className="btn btn-outline" href={`${previewBaseOrigin || ""}/pages/${item.slug}`} target="_blank" rel="noreferrer">Open</a>
                     <button className="btn btn-outline" type="button" onClick={() => void deleteCustomPage(item.id).then(refreshAll)}>Delete</button>
                   </div>
                 </div>
               ))}
+              {pages.some((item) => (item.routeMode === "direct" ? "direct" : "pages") === "pages") ? null : <p className="muted">No /pages links yet.</p>}
+              <div className="notice" style={{ marginTop: "0.8rem" }}>
+                <strong>Landing Page Links</strong>
+                <p className="muted" style={{ marginTop: "0.35rem" }}>Direct routes like /landing-page-slug.</p>
+              </div>
+              {pages.filter((item) => (item.routeMode === "direct" ? "direct" : "pages") === "direct").map((item) => (
+                <div className="notice" key={`direct-${item.id}`}>
+                  <strong>{item.title}</strong> <span className="muted">(/{item.slug})</span>
+                  <p className="muted">{item.isPublished ? "Published" : "Draft"} | {item.contentMode === "design" ? "Design" : "Text"}</p>
+                  <p className="muted">{previewBaseOrigin ? `${previewBaseOrigin}/${item.slug}` : `/${item.slug}`}</p>
+                  <div className="form-actions">
+                    <button className="btn btn-outline" type="button" onClick={() => {
+                      setPageEditingId(item.id);
+                      setPageForm({
+                        title: item.title,
+                        slug: item.slug,
+                        routeMode: item.routeMode === "direct" ? "direct" : "pages",
+                        contentMode: item.contentMode === "design" ? "design" : "text",
+                        content: item.content,
+                        designHtml: item.designHtml ?? "",
+                        designCss: item.designCss ?? "",
+                        designJs: item.designJs ?? "",
+                        showHeader: item.showHeader !== false,
+                        showFooter: item.showFooter !== false,
+                        seoTitle: item.seoTitle ?? "",
+                        seoDescription: item.seoDescription ?? "",
+                        isPublished: item.isPublished
+                      });
+                    }}>Edit</button>
+                    <a className="btn btn-outline" href={`${previewBaseOrigin || ""}/${item.slug}`} target="_blank" rel="noreferrer">Open</a>
+                    <button className="btn btn-outline" type="button" onClick={() => void deleteCustomPage(item.id).then(refreshAll)}>Delete</button>
+                  </div>
+                </div>
+              ))}
+              {pages.some((item) => (item.routeMode === "direct" ? "direct" : "pages") === "direct") ? null : <p className="muted">No direct landing pages yet.</p>}
             </div>
           </section>
 
@@ -4359,7 +4448,7 @@ export default function AdminPage() {
             </div>
           </section>
 
-          <section className="admin-section admin-card" hidden={!isTabActive("engagement")}>
+          <section className="admin-section admin-card" hidden={!isTabActive("subscribers")}>
             <h3>Subscription and Notification Center</h3>
             <form className="form-grid" onSubmit={handleNotificationSubmit}>
               <input placeholder="Notification title" value={notificationForm.title} onChange={(event) => setNotificationForm((prev) => ({ ...prev, title: event.target.value }))} required />
@@ -4378,11 +4467,20 @@ export default function AdminPage() {
 
             <div className="table-like">
               <div className="notice">
-                <strong>Subscribers ({subscriptions.length})</strong>
-                <p className="muted">Latest 10</p>
-                {subscriptions.slice(0, 10).map((item) => (
-                  <p key={item.id} className="muted">{item.email} {item.topicId ? `-> ${item.topicId}` : "-> website"}</p>
-                ))}
+                <div className="form-actions" style={{ justifyContent: "space-between", alignItems: "center" }}>
+                  <strong>Subscribers ({subscriptions.length})</strong>
+                  <button className="btn btn-outline" type="button" onClick={() => downloadSubscriptionsCsv(subscriptions)}>
+                    Download Subscribers CSV
+                  </button>
+                </div>
+                <p className="muted">All subscribers</p>
+                {subscriptions.length ? (
+                  subscriptions.map((item) => (
+                    <p key={item.id} className="muted">{item.email} {item.topicId ? `-> ${item.topicId}` : "-> website"}</p>
+                  ))
+                ) : (
+                  <p className="muted">No subscribers yet.</p>
+                )}
               </div>
               <div className="notice">
                 <strong>Recent notifications</strong>
@@ -4393,7 +4491,7 @@ export default function AdminPage() {
             </div>
           </section>
 
-          <section className="admin-section admin-card" hidden={!isTabActive("engagement")}>
+          <section className="admin-section admin-card" hidden={true}>
             <h3>Post-wise Analytics</h3>
             <div className="table-like">
               {postAnalytics.length ? (
@@ -4409,7 +4507,7 @@ export default function AdminPage() {
             </div>
           </section>
 
-          <section className="admin-section admin-card" hidden={!isTabActive("engagement")}>
+          <section className="admin-section admin-card" hidden={true}>
             <h3>Post-wise Feedback</h3>
             <div className="table-like">
               {feedback.length ? (
@@ -4507,6 +4605,7 @@ export default function AdminPage() {
               <div className="modal" onClick={(event) => event.stopPropagation()}>
                 <h3>Edit Hero Slide</h3>
                 <p>Update title, image URL, redirect link, and enable state.</p>
+                <p className="muted">Recommended size: 1600x900 image banner.</p>
                 <form className="form-grid" onSubmit={handleHeroMediaSubmit}>
                   <input
                     placeholder="Slide title"
@@ -4563,6 +4662,50 @@ export default function AdminPage() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

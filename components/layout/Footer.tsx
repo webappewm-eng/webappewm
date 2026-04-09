@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -64,6 +64,17 @@ function platformColor(platform: PlatformKey): string {
   if (platform === "github") return "#24292E";
   if (platform === "website") return "#FF6B00";
   return "#616161";
+}
+
+function ShareIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="6" cy="12" r="2.3" fill="currentColor" />
+      <circle cx="18" cy="6" r="2.3" fill="currentColor" />
+      <circle cx="18" cy="18" r="2.3" fill="currentColor" />
+      <path d="M8 11l7.4-3.6M8 13l7.4 3.6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
 }
 
 function PlatformIcon({ platform }: { platform: PlatformKey }) {
@@ -189,7 +200,8 @@ export function Footer() {
   );
   const [footerSocialLinks, setFooterSocialLinks] = useState<SocialLink[]>(bootstrap.footerSocialLinks);
   const [floatingSocialLinks, setFloatingSocialLinks] = useState<SocialLink[]>(bootstrap.floatingSocialLinks);
-  const [floatingOpen, setFloatingOpen] = useState(true);
+  const [floatingOpen, setFloatingOpen] = useState(bootstrap.siteSettings.mobileFloatingSocialDefaultOpen !== false);
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [siteSettings, setSiteSettings] = useState(
     bootstrap.siteSettings.logoTitleLine1 ? bootstrap.siteSettings : fallbackSiteChromeSettings
   );
@@ -210,13 +222,26 @@ export function Footer() {
   }, []);
 
   useEffect(() => {
+    function syncViewport() {
+      const mobile = window.innerWidth <= 980;
+      setIsMobileViewport(mobile);
+      setFloatingOpen(mobile ? false : bootstrap.siteSettings.mobileFloatingSocialDefaultOpen !== false);
+    }
+
+    syncViewport();
+    window.addEventListener("resize", syncViewport);
+    return () => window.removeEventListener("resize", syncViewport);
+  }, [bootstrap.siteSettings.mobileFloatingSocialDefaultOpen]);
+
+  useEffect(() => {
     setSiteSettings(bootstrap.siteSettings);
+    setFloatingOpen(isMobileViewport ? false : bootstrap.siteSettings.mobileFloatingSocialDefaultOpen !== false);
     if (bootstrap.footerLinks.length) {
       setFooterLinks(bootstrap.footerLinks);
     }
     setFooterSocialLinks(bootstrap.footerSocialLinks);
     setFloatingSocialLinks(bootstrap.floatingSocialLinks);
-  }, [bootstrap.footerLinks, bootstrap.footerSocialLinks, bootstrap.floatingSocialLinks, bootstrap.siteSettings]);
+  }, [bootstrap.footerLinks, bootstrap.footerSocialLinks, bootstrap.floatingSocialLinks, bootstrap.siteSettings, isMobileViewport]);
 
   useEffect(() => {
     async function loadSocial() {
@@ -268,19 +293,28 @@ export function Footer() {
     [siteSettings.logoSize]
   );
 
+  const floatingClasses = [
+    "social-floating",
+    floatingOpen ? "open" : "collapsed",
+    siteSettings.mobileFloatingSocialPosition === "right-bottom" ? "floating-pos-right-bottom" : "floating-pos-left-middle",
+    siteSettings.mobileFloatingSocialEnabled ? "floating-mobile-enabled" : "floating-mobile-hidden"
+  ].join(" ");
+
   return (
     <>
       {floatingSocialLinks.length ? (
-        <aside className={`social-floating ${floatingOpen ? "open" : "collapsed"}`} aria-label="Social media links">
+        <aside className={floatingClasses} aria-label="Social media links">
           <button
             type="button"
-            className="floating-toggle-btn"
+            className={`floating-toggle-btn ${isMobileViewport ? "mobile-share-toggle" : ""}`}
             onClick={() => setFloatingOpen((prev) => !prev)}
             aria-expanded={floatingOpen}
-            aria-label={floatingOpen ? "Collapse social links" : "Expand social links"}
-            title={floatingOpen ? "Collapse" : "Expand"}
+            aria-label={floatingOpen ? "Hide social links" : "Show social links"}
+            title={floatingOpen ? "Hide social links" : "Show social links"}
           >
-            <span className="floating-toggle-arrow" aria-hidden="true">{floatingOpen ? "<" : ">"}</span>
+            <span className="floating-toggle-arrow" aria-hidden="true">
+              <ShareIcon />
+            </span>
           </button>
           {floatingOpen
             ? floatingSocialLinks.map((item) => <SocialItem key={`floating-${item.id}`} item={item} floating />)
@@ -357,17 +391,8 @@ export function Footer() {
 
         <div className="footer-bottom">
           <span>(c) 2026 Engineer With Me</span>
-          
         </div>
       </footer>
     </>
   );
 }
-
-
-
-
-
-
-
-

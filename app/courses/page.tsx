@@ -64,11 +64,6 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
             <Link href="/">Home</Link> / Courses
           </p>
 
-          <div className="label">Certification</div>
-          <h1 className="h2">Courses and Certification Programs</h1>
-          <p className="body-txt">Complete lessons, unlock tests, and download certificates.</p>
-
-
           <div className="courses-page-layout">
             <aside className="courses-sidebar-tree">
               {sortedTypes.map((typeItem) => {
@@ -119,7 +114,7 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
                 {filteredCourses.length ? (
                   filteredCourses.map((item) => (
                     <article className="post-card" key={item.id}>
-                      <Image src={safeImage(item.coverImage)} alt={item.title} width={1200} height={700} />
+                      <Image className="course-card-image" src={safeImage(item.coverImage)} alt={item.title} width={900} height={900} />
                       <h3>{item.title}</h3>
                       <p className="meta">
                         {item.lessons.length} lessons | Pass mark {item.passingScore}%

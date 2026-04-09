@@ -82,8 +82,21 @@ function getSafeImageSrc(value: string | undefined): string {
   return FALLBACK_POST_IMAGE;
 }
 
-function isExternalHref(value: string): boolean {
-  return /^https?:\/\//i.test(value);
+function resolveSlideHref(value: string): { href: string; external: boolean } {
+  const next = value.trim();
+  if (!next) {
+    return { href: "", external: false };
+  }
+  if (/^https?:\/\//i.test(next)) {
+    return { href: next, external: true };
+  }
+  if (/^\/[a-z0-9.-]+\.[a-z]{2,}(?:[/?#].*)?$/i.test(next)) {
+    return { href: `https://${next.replace(/^\/+/, "")}`, external: true };
+  }
+  if (/^[a-z0-9.-]+\.[a-z]{2,}(?:[/:?#].*)?$/i.test(next)) {
+    return { href: `https://${next}`, external: true };
+  }
+  return { href: next, external: false };
 }
 
 interface HomePageClientProps {
@@ -276,6 +289,7 @@ export default function HomePageClient({
     });
   }, [posts, searchText, selectedCategory, selectedSubtopic]);
   const currentImageSlide = imageSlides[imageIndex];
+  const currentImageSlideLink = currentImageSlide?.redirectUrl ? resolveSlideHref(currentImageSlide.redirectUrl) : null;
   const showHeroImageSlider = heroImageSliderEnabled && Boolean(currentImageSlide);
 
   return (
@@ -290,9 +304,9 @@ export default function HomePageClient({
               <div className="hero-slider-wrap hero-slider-top hero-slider-full">
                 <div className="slider-box">
                   <div className="slide slide-hero-wide">
-                    {currentImageSlide?.redirectUrl ? (
-                      isExternalHref(currentImageSlide.redirectUrl) ? (
-                        <a className="slide-media-link" href={currentImageSlide.redirectUrl} target="_blank" rel="noreferrer">
+                    {currentImageSlideLink?.href ? (
+                      currentImageSlideLink.external ? (
+                        <a className="slide-media-link" href={currentImageSlideLink.href} target="_blank" rel="noreferrer">
                           <Image
                             key={currentImageSlide.id}
                             src={currentImageSlide.source}
@@ -303,7 +317,7 @@ export default function HomePageClient({
                           <span className="slide-caption">{currentImageSlide.title}</span>
                         </a>
                       ) : (
-                        <Link className="slide-media-link" href={currentImageSlide.redirectUrl}>
+                        <Link className="slide-media-link" href={currentImageSlideLink.href}>
                           <Image
                             key={currentImageSlide.id}
                             src={currentImageSlide.source}
@@ -595,4 +609,9 @@ export default function HomePageClient({
     </div>
   );
 }
+
+
+
+
+
 

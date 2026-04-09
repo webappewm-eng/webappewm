@@ -1,4 +1,4 @@
-import {
+﻿import {
   Category,
   CertificateTemplate,
   CommunityCategory,
@@ -350,6 +350,9 @@ export const mockSiteSettings: SiteSettings = {
   logoTitleLine1: "Engineer",
   logoTitleLine2: "With",
   logoAccentText: "Me",
+  mobileFloatingSocialEnabled: true,
+  mobileFloatingSocialDefaultOpen: true,
+  mobileFloatingSocialPosition: "left-middle",
   communityApprovalEnabled: true,
   contentPreviewEnabled: true,
   contentPreviewPercent: 20,
@@ -367,4 +370,8 @@ export const mockSiteSettings: SiteSettings = {
 };
 
 export const mockLandingTopics: LandingTopic[] = [];
+
+
+
+
 

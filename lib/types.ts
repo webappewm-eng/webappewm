@@ -63,6 +63,16 @@ export interface Subscription {
   createdAt: string;
 }
 
+export interface CourseFeedback {
+  id: string;
+  courseId: string;
+  userId: string;
+  userEmail: string;
+  rating: number;
+  message: string;
+  createdAt: string;
+}
+
 export interface UserProfile {
   uid: string;
   email: string | null;
@@ -93,6 +103,7 @@ export interface CustomPage {
   id: string;
   title: string;
   slug: string;
+  routeMode?: "pages" | "direct";
   content: string;
   contentMode?: "text" | "design";
   designHtml?: string;
@@ -166,6 +177,9 @@ export interface SiteSettings {
   logoTitleLine1: string;
   logoTitleLine2: string;
   logoAccentText: string;
+  mobileFloatingSocialEnabled: boolean;
+  mobileFloatingSocialDefaultOpen: boolean;
+  mobileFloatingSocialPosition: "left-middle" | "right-bottom";
   communityApprovalEnabled: boolean;
   contentPreviewEnabled: boolean;
   contentPreviewPercent: number;
@@ -256,6 +270,7 @@ export interface Course {
   questions: CourseQuestion[];
   adsEnabled: boolean;
   adIds: string[];
+  feedbackEnabled?: boolean;
   customLandingEnabled?: boolean;
   customLandingSlug?: string;
   landingHtml?: string;
@@ -405,6 +420,14 @@ export interface LandingTopic {
   isPublished: boolean;
   updatedAt: string;
 }
+
+
+
+
+
+
+
+
 
 
 

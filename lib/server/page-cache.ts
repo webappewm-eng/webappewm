@@ -62,8 +62,11 @@ const loadSiteBootstrapSnapshot = unstable_cache(
         logoSize: settings.logoSize,
         logoTitleLine1: settings.logoTitleLine1,
         logoTitleLine2: settings.logoTitleLine2,
-        logoAccentText: settings.logoAccentText
-      },
+        logoAccentText: settings.logoAccentText,
+        mobileFloatingSocialEnabled: settings.mobileFloatingSocialEnabled,
+        mobileFloatingSocialDefaultOpen: settings.mobileFloatingSocialDefaultOpen,
+        mobileFloatingSocialPosition: settings.mobileFloatingSocialPosition
+},
       headerLinks: headerLinks.length ? headerLinks : fallbackSiteBootstrapSnapshot.headerLinks,
       footerLinks: footerLinks.length ? footerLinks : fallbackSiteBootstrapSnapshot.footerLinks,
       footerSocialLinks,
@@ -140,8 +143,8 @@ const loadCourseAds = unstable_cache(async () => getCourseAds(), ["course-ads-v1
 const loadPublishedLandingTopics = unstable_cache(async () => getLandingTopics(false), ["landing-topics-published-v1"], { revalidate: 60 });
 const loadLandingTopicBySlug = unstable_cache(async (slug: string) => getLandingTopicBySlug(slug), ["landing-topic-by-slug-v1"], { revalidate: 60 });
 
-const loadPublishedCustomPages = unstable_cache(async () => getCustomPages(false), ["custom-pages-published-v1"], { revalidate: 60 });
-const loadCustomPageBySlug = unstable_cache(async (slug: string) => getCustomPageBySlug(slug), ["custom-page-by-slug-v1"], { revalidate: 60 });
+const loadPublishedCustomPages = unstable_cache(async () => getCustomPages(false), ["custom-pages-published-v2"], { revalidate: 60 });
+const loadCustomPageBySlug = unstable_cache(async (slug: string, routeMode: "pages" | "direct" = "pages") => getCustomPageBySlug(slug, routeMode), ["custom-page-by-slug-v2"], { revalidate: 60 });
 
 const loadPublishedWebinars = unstable_cache(async () => getWebinars(false), ["webinars-published-v1"], { revalidate: 60 });
 const loadWebinarBySlug = unstable_cache(async (slug: string) => getWebinarBySlug(slug), ["webinar-by-slug-v1"], { revalidate: 60 });
@@ -232,17 +235,18 @@ export async function getCachedLandingTopicBySlug(slug: string) {
   }
 }
 
-export async function getCachedPublishedCustomPages() {
+export async function getCachedPublishedCustomPages(routeMode: "pages" | "direct" = "pages") {
   try {
-    return await loadPublishedCustomPages();
+    const pages = await loadPublishedCustomPages();
+    return pages.filter((item) => (item.routeMode === "direct" ? "direct" : "pages") === routeMode);
   } catch {
     return [];
   }
 }
 
-export async function getCachedCustomPageBySlug(slug: string) {
+export async function getCachedCustomPageBySlug(slug: string, routeMode: "pages" | "direct" = "pages") {
   try {
-    return await loadCustomPageBySlug(slug.trim().toLowerCase());
+    return await loadCustomPageBySlug(slug.trim().toLowerCase(), routeMode);
   } catch {
     return null;
   }
@@ -263,5 +267,8 @@ export async function getCachedWebinarBySlug(slug: string) {
     return null;
   }
 }
+
+
+
 
 

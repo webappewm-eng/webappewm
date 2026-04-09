@@ -7,20 +7,43 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { openCertificatePrint } from "@/lib/certificates/print";
 import {
   getCertificateTemplates,
+  getCourseAds,
+  getCourseFeedback,
   getUserCertificates,
   getUserCourseProgress,
   issueCertificate,
+  saveCourseFeedback,
   upsertUserCourseProgress
 } from "@/lib/firebase/data";
-import { CertificateTemplate, Course, CourseAd, UserCertificate, UserCourseProgress } from "@/lib/types";
+import { CertificateTemplate, Course, CourseAd, CourseFeedback, UserCertificate, UserCourseProgress } from "@/lib/types";
 
 interface CourseDetailClientProps {
   course: Course;
   ads?: CourseAd[];
   nextCourse?: { slug: string; title: string } | null;
+  previewEnabled?: boolean;
+  previewPercent?: number;
+}
+
+function resolveAdHref(value: string): string {
+  const next = value.trim();
+  if (!next) {
+    return "";
+  }
+  if (/^https?:\/\//i.test(next)) {
+    return next;
+  }
+  if (/^\/[a-z0-9.-]+\.[a-z]{2,}(?:[/?#].*)?$/i.test(next)) {
+    return `https://${next.replace(/^\/+/, "")}`;
+  }
+  if (/^[a-z0-9.-]+\.[a-z]{2,}(?:[/:?#].*)?$/i.test(next)) {
+    return `https://${next}`;
+  }
+  return next;
 }
 
 function renderAdItem(ad: CourseAd) {
+  const redirectHref = resolveAdHref(ad.redirectUrl || "");
   if (ad.type === "code") {
     const srcDoc = `<!doctype html><html><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /></head><body>${ad.code || ""}</body></html>`;
     return (
@@ -40,8 +63,8 @@ function renderAdItem(ad: CourseAd) {
       </video>
     );
 
-    return ad.redirectUrl ? (
-      <a href={ad.redirectUrl} target="_blank" rel="noreferrer">
+    return redirectHref ? (
+      <a href={redirectHref} target="_blank" rel="noreferrer">
         {player}
       </a>
     ) : (
@@ -50,8 +73,8 @@ function renderAdItem(ad: CourseAd) {
   }
 
   const image = <img src={ad.source} alt={ad.title || ad.name} style={{ width: "100%", borderRadius: "8px" }} />;
-  return ad.redirectUrl ? (
-    <a href={ad.redirectUrl} target="_blank" rel="noreferrer">
+  return redirectHref ? (
+    <a href={redirectHref} target="_blank" rel="noreferrer">
       {image}
     </a>
   ) : (
@@ -59,7 +82,22 @@ function renderAdItem(ad: CourseAd) {
   );
 }
 
-export function CourseDetailClient({ course, ads = [], nextCourse = null }: CourseDetailClientProps) {
+function buildCoursePreview(content: string, percent: number): string {
+  const safePercent = Math.max(5, Math.min(95, percent || 20));
+  const clean = content.trim();
+  if (!clean) {
+    return "";
+  }
+  const target = Math.max(120, Math.ceil((clean.length * safePercent) / 100));
+  return `${clean.slice(0, target).trimEnd()} ... Login to continue.`;
+}
+export function CourseDetailClient({
+  course,
+  ads = [],
+  nextCourse = null,
+  previewEnabled = false,
+  previewPercent = 20
+}: CourseDetailClientProps) {
   const { user } = useAuth();
 
   const [progress, setProgress] = useState<UserCourseProgress | null>(null);
@@ -68,9 +106,19 @@ export function CourseDetailClient({ course, ads = [], nextCourse = null }: Cour
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
+  const [adItems, setAdItems] = useState<CourseAd[]>(ads);
   const [loginOpen, setLoginOpen] = useState(false);
   const [selectedLessonId, setSelectedLessonId] = useState("");
   const [testPanelOpen, setTestPanelOpen] = useState(false);
+  const [feedbackRows, setFeedbackRows] = useState<CourseFeedback[]>([]);
+  const [feedbackRating, setFeedbackRating] = useState(5);
+  const [feedbackMessage, setFeedbackMessage] = useState("");
+  const [feedbackBusy, setFeedbackBusy] = useState(false);
+  const [feedbackStatus, setFeedbackStatus] = useState("");
+
+  useEffect(() => {
+    setAdItems(ads);
+  }, [ads]);
 
   const sortedLessons = useMemo(
     () => course.lessons.slice().sort((a, b) => a.order - b.order),
@@ -87,6 +135,7 @@ export function CourseDetailClient({ course, ads = [], nextCourse = null }: Cour
   const activeLessonIndex = Math.max(0, sortedLessons.findIndex((lesson) => lesson.id === selectedLessonId));
   const activeLesson = sortedLessons[activeLessonIndex] ?? sortedLessons[0] ?? null;
   const hasTestQuestions = course.questions.length > 0;
+  const coursePreviewLocked = previewEnabled && !user?.uid;
 
   const activeTemplate = useMemo(() => {
     if (!templates.length) {
@@ -100,6 +149,42 @@ export function CourseDetailClient({ course, ads = [], nextCourse = null }: Cour
     }
     return templates.find((item) => item.enabled) ?? templates[0];
   }, [course.templateId, templates]);
+
+  useEffect(() => {
+    async function refreshCourseAds() {
+      if (!course.adsEnabled) {
+        setAdItems([]);
+        return;
+      }
+
+      try {
+        const rows = await getCourseAds();
+        setAdItems(rows.filter((item) => item.enabled && course.adIds.includes(item.id)));
+      } catch {
+        // Keep server-hydrated ad list on failure.
+      }
+    }
+
+    void refreshCourseAds();
+  }, [course.adsEnabled, course.adIds, course.id]);
+
+  useEffect(() => {
+    async function loadCourseFeedbackRows() {
+      if (!course.feedbackEnabled) {
+        setFeedbackRows([]);
+        return;
+      }
+
+      try {
+        const rows = await getCourseFeedback(course.id);
+        setFeedbackRows(rows);
+      } catch {
+        setFeedbackStatus("Could not load course feedback right now.");
+      }
+    }
+
+    void loadCourseFeedbackRows();
+  }, [course.feedbackEnabled, course.id]);
 
   useEffect(() => {
     async function loadData() {
@@ -314,6 +399,48 @@ export function CourseDetailClient({ course, ads = [], nextCourse = null }: Cour
     }
   }
 
+  async function submitCourseFeedback(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setFeedbackStatus("");
+
+    if (!course.feedbackEnabled) {
+      return;
+    }
+
+    if (!user?.uid || !user.email) {
+      setFeedbackStatus("Login is required to submit course feedback.");
+      setLoginOpen(true);
+      return;
+    }
+
+    if (!feedbackMessage.trim()) {
+      setFeedbackStatus("Please share a short feedback message before submitting.");
+      return;
+    }
+
+    setFeedbackBusy(true);
+
+    try {
+      await saveCourseFeedback({
+        courseId: course.id,
+        userId: user.uid,
+        userEmail: user.email,
+        rating: Math.max(1, Math.min(5, feedbackRating)),
+        message: feedbackMessage.trim()
+      });
+
+      const rows = await getCourseFeedback(course.id);
+      setFeedbackRows(rows);
+      setFeedbackMessage("");
+      setFeedbackRating(5);
+      setFeedbackStatus("Feedback submitted successfully.");
+    } catch {
+      setFeedbackStatus("Could not submit feedback right now.");
+    } finally {
+      setFeedbackBusy(false);
+    }
+  }
+
   const certificateScore = certificate?.score ?? progress?.score ?? 0;
   const certificateAttempts = certificate?.attempts ?? progress?.testAttempts ?? 0;
   const certificateQuestions = certificate?.totalQuestions ?? course.questions.length;
@@ -321,12 +448,12 @@ export function CourseDetailClient({ course, ads = [], nextCourse = null }: Cour
 
   return (
     <>
-      {course.adsEnabled && ads.length ? (
+      {course.adsEnabled && adItems.length ? (
         <section className="post-content" style={{ marginTop: "1rem" }}>
           <div className="post-content-inner">
             <div className="label">Sponsored</div>
             <div className="table-like" style={{ marginTop: "0.8rem" }}>
-              {ads.map((ad) => (
+              {adItems.map((ad) => (
                 <article className="notice" key={`course-ad-${ad.id}`}>
                   <strong>{ad.title || ad.name}</strong>
                   <div style={{ marginTop: "0.6rem" }}>{renderAdItem(ad)}</div>
@@ -342,15 +469,9 @@ export function CourseDetailClient({ course, ads = [], nextCourse = null }: Cour
           <div className="label">Course Sections</div>
           <p className="muted">Use the sidebar to open each section. Mark each one complete to unlock the certification button.</p>
 
-          <div
-            style={{
-              display: "grid",
-              gap: "1rem",
-              gridTemplateColumns: sortedLessons.length > 1 ? "minmax(220px, 280px) minmax(0, 1fr)" : "minmax(0, 1fr)"
-            }}
-          >
+          <div className={`course-sections-grid ${sortedLessons.length > 1 ? "has-sidebar" : "single-column"}`}>
             {sortedLessons.length > 1 ? (
-              <aside className="notice" style={{ alignSelf: "start" }}>
+              <aside className="notice course-sections-sidebar">
                 <strong>Available Sections</strong>
                 <div className="table-like" style={{ marginTop: "0.7rem" }}>
                   {sortedLessons.map((lesson, index) => {
@@ -371,7 +492,7 @@ export function CourseDetailClient({ course, ads = [], nextCourse = null }: Cour
               </aside>
             ) : null}
 
-            <article className="notice">
+            <article className="notice course-sections-panel">
               {activeLesson ? (
                 <>
                   <div className="form-actions" style={{ justifyContent: "space-between", alignItems: "center" }}>
@@ -380,16 +501,26 @@ export function CourseDetailClient({ course, ads = [], nextCourse = null }: Cour
                       <input
                         type="checkbox"
                         checked={completedSet.has(activeLesson.id)}
-                        disabled={busy}
+                        disabled={busy || coursePreviewLocked}
                         onChange={() => void toggleLesson(activeLesson.id)}
                       />
                       Complete
                     </label>
                   </div>
 
-                  <p className="muted" style={{ marginTop: "0.7rem", whiteSpace: "pre-wrap" }}>{activeLesson.content}</p>
+                  <p className="muted" style={{ marginTop: "0.7rem", whiteSpace: "pre-wrap" }}>{coursePreviewLocked ? buildCoursePreview(activeLesson.content, previewPercent) : activeLesson.content}</p>
 
-                  <div className="form-actions" style={{ marginTop: "0.8rem", justifyContent: "space-between" }}>
+                  {coursePreviewLocked ? (
+                    <div className="notice" style={{ marginTop: "0.8rem" }}>
+                      <strong>Login to continue this course</strong>
+                      <p className="muted" style={{ margin: "0.45rem 0 0" }}>The course preview gate is enabled from admin. Login to open full sections, track progress, and unlock certification.</p>
+                      <div className="form-actions course-section-actions">
+                        <button className="btn btn-primary" type="button" onClick={() => setLoginOpen(true)}>Login to Continue</button>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div className="form-actions course-section-actions">
                     <button
                       className="btn btn-outline"
                       type="button"
@@ -460,7 +591,7 @@ export function CourseDetailClient({ course, ads = [], nextCourse = null }: Cour
                             name={`question-${questionIndex}`}
                             checked={selected}
                             onChange={() => setAnswers((prev) => ({ ...prev, [questionIndex]: optionIndex }))}
-                            disabled={busy}
+                            disabled={busy || coursePreviewLocked}
                           />
                           <span>{option}</span>
                         </label>
@@ -471,10 +602,10 @@ export function CourseDetailClient({ course, ads = [], nextCourse = null }: Cour
               ))}
 
               <div className="form-actions">
-                <button className="btn btn-primary" type="submit" disabled={busy}>
+                <button className="btn btn-primary" type="submit" disabled={busy || coursePreviewLocked}>
                   {busy ? "Submitting..." : "Submit Certification Test"}
                 </button>
-                <button className="btn btn-outline" type="button" onClick={() => setTestPanelOpen(false)} disabled={busy}>
+                <button className="btn btn-outline" type="button" onClick={() => setTestPanelOpen(false)} disabled={busy || coursePreviewLocked}>
                   Close Test Panel
                 </button>
               </div>
@@ -532,10 +663,77 @@ export function CourseDetailClient({ course, ads = [], nextCourse = null }: Cour
         </div>
       </section>
 
+      {course.feedbackEnabled ? (
+        <section className="post-content" style={{ marginTop: "1rem" }}>
+          <div className="post-content-inner">
+            <div className="label">Feedback</div>
+            <h3 style={{ marginTop: "0.35rem" }}>Rate This Course</h3>
+            <p className="muted">Collect learner feedback only when this option is enabled in admin.</p>
+
+            {user?.uid ? (
+              <form className="form-grid" onSubmit={submitCourseFeedback} style={{ marginTop: "0.85rem" }}>
+                <select value={String(feedbackRating)} onChange={(event) => setFeedbackRating(Number(event.target.value || "5"))}>
+                  <option value="5">5 - Excellent</option>
+                  <option value="4">4 - Good</option>
+                  <option value="3">3 - Average</option>
+                  <option value="2">2 - Needs improvement</option>
+                  <option value="1">1 - Poor</option>
+                </select>
+                <textarea
+                  rows={4}
+                  placeholder="What did you like, and what should improve?"
+                  value={feedbackMessage}
+                  onChange={(event) => setFeedbackMessage(event.target.value)}
+                />
+                <div className="form-actions">
+                  <button className="btn btn-primary" type="submit" disabled={feedbackBusy}>
+                    {feedbackBusy ? "Submitting..." : "Submit Feedback"}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="notice" style={{ marginTop: "0.85rem" }}>
+                <strong>Login to share feedback</strong>
+                <p className="muted" style={{ margin: "0.45rem 0 0" }}>Only logged-in learners can rate this course and leave feedback.</p>
+                <div className="form-actions" style={{ marginTop: "0.7rem" }}>
+                  <button className="btn btn-primary" type="button" onClick={() => setLoginOpen(true)}>Login to Give Feedback</button>
+                </div>
+              </div>
+            )}
+
+            <div className="table-like" style={{ marginTop: "1rem" }}>
+              {feedbackRows.length ? (
+                feedbackRows.slice(0, 6).map((item) => (
+                  <article className="notice" key={`course-feedback-row-${item.id}`}>
+                    <strong>{item.userEmail}</strong>
+                    <p className="muted" style={{ marginBottom: "0.4rem" }}>Rating: {item.rating}/5 | {new Date(item.createdAt).toLocaleDateString()}</p>
+                    <p style={{ margin: 0 }}>{item.message}</p>
+                  </article>
+                ))
+              ) : (
+                <p className="muted">No feedback submitted for this course yet.</p>
+              )}
+            </div>
+
+            {feedbackStatus ? <div className="notice" style={{ marginTop: "0.8rem" }}>{feedbackStatus}</div> : null}
+          </div>
+        </section>
+      ) : null}
+
       <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} />
     </>
   );
 }
+
+
+
+
+
+
+
+
+
+
 
 
 

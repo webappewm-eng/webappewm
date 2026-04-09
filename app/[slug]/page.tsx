@@ -12,7 +12,7 @@ export const dynamicParams = true;
 
 export async function generateStaticParams() {
   try {
-    const pages = await getCachedPublishedCustomPages("pages");
+    const pages = await getCachedPublishedCustomPages("direct");
     return pages.map((page) => ({ slug: page.slug }));
   } catch {
     return [];
@@ -21,7 +21,7 @@ export async function generateStaticParams() {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const page = await getCachedCustomPageBySlug(slug, "pages");
+  const page = await getCachedCustomPageBySlug(slug, "direct");
 
   if (!page) {
     return {
@@ -35,13 +35,13 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
-export default async function CustomPageRoute({ params }: PageProps) {
+export default async function DirectLandingPageRoute({ params }: PageProps) {
   const { slug } = await params;
-  const page = await getCachedCustomPageBySlug(slug, "pages");
+  const page = await getCachedCustomPageBySlug(slug, "direct");
 
   if (!page) {
     notFound();
   }
 
-  return <CustomPageRouteView page={page} breadcrumbLabel={page.title} />;
+  return <CustomPageRouteView page={page} />;
 }

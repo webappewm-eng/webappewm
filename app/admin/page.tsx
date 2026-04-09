@@ -63,6 +63,7 @@ import {
   getThirdPartyScripts,
   getVisitorAnalytics,
   getVisitorCountryAnalyticsByDate,
+  getUsersForAdmin,
   getWebinars,
   getWebinarRegistrations,
   getCourses,
@@ -96,6 +97,7 @@ import {
 } from "@/lib/firebase/data";
 import {
   AnalyticsSummary,
+  AdminUserRecord,
   Category,
   CommunityAnswer,
   CommunityCategory,
@@ -535,6 +537,37 @@ function downloadSampleCourseSectionsFile(): void {
   URL.revokeObjectURL(url);
 }
 
+function downloadUsersCsv(rows: AdminUserRecord[]): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const header = "uid,email,name,city,date_of_birth,role,is_admin,created_at,last_login_at,updated_at";
+  const body = rows.map((item) => {
+    const safe = (value: string) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    return [
+      safe(item.uid),
+      safe(item.email),
+      safe(item.displayName),
+      safe(item.city),
+      safe(item.dateOfBirth),
+      safe(item.role),
+      item.isAdmin ? "true" : "false",
+      safe(item.createdAt),
+      safe(item.lastLoginAt),
+      safe(item.updatedAt)
+    ].join(",");
+  });
+
+  const csv = [header, ...body].join("\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = "users-export.csv";
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
 type AdminTabKey = "general" | "category" | "topics" | "pages" | "seo" | "learning" | "engagement";
 
 const adminTabs: { key: AdminTabKey; label: string }[] = [
@@ -556,6 +589,7 @@ export default function AdminPage() {
   const [landingTopics, setLandingTopics] = useState<LandingTopic[]>([]);
   const [scripts, setScripts] = useState<ThirdPartyScript[]>([]);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
+  const [usersData, setUsersData] = useState<AdminUserRecord[]>([]);
   const [notifications, setNotifications] = useState<NotificationMessage[]>([]);
   const [navigationLinks, setNavigationLinks] = useState<NavigationLink[]>([]);
   const [analytics, setAnalytics] = useState<AnalyticsSummary>({
@@ -649,7 +683,6 @@ export default function AdminPage() {
 
   const [appearanceForm, setAppearanceForm] = useState({
     themeMode: "light" as SiteSettings["themeMode"],
-    layoutSideGap: "32",
     heroVideoSliderEnabled: false,
     heroImageSliderEnabled: false,
     logoMode: "text" as SiteSettings["logoMode"],
@@ -784,6 +817,7 @@ export default function AdminPage() {
       nextScripts,
       nextHeroMedia,
       nextSubscriptions,
+      nextUsers,
       nextNotifications,
       nextNavLinks,
       nextAnalytics,
@@ -812,6 +846,7 @@ export default function AdminPage() {
       getThirdPartyScripts(),
       getHeroMediaForAdmin(),
       listSubscriptions(),
+      getUsersForAdmin(),
       getNotifications(),
       getNavigationLinksForAdmin(),
       getAnalyticsSummary(),
@@ -841,6 +876,7 @@ export default function AdminPage() {
     setScripts(nextScripts);
     setHeroMedia(nextHeroMedia);
     setSubscriptions(nextSubscriptions);
+    setUsersData(nextUsers);
     setNotifications(nextNotifications);
     setNavigationLinks(nextNavLinks);
     setAnalytics(nextAnalytics);
@@ -880,7 +916,6 @@ export default function AdminPage() {
 
     setAppearanceForm({
       themeMode: nextSettings.themeMode,
-      layoutSideGap: String(nextSettings.layoutSideGap),
       heroVideoSliderEnabled: nextSettings.heroVideoSliderEnabled,
       heroImageSliderEnabled: nextSettings.heroImageSliderEnabled,
       logoMode: nextSettings.logoMode,
@@ -1028,6 +1063,20 @@ export default function AdminPage() {
     return map;
   }, [certificateTemplates]);
 
+  const userSignupsByDate = useMemo(() => {
+    const counts: Record<string, number> = {};
+    usersData.forEach((item) => {
+      const date = (item.createdAt || "").slice(0, 10);
+      if (!date) {
+        return;
+      }
+      counts[date] = (counts[date] ?? 0) + 1;
+    });
+
+    return Object.entries(counts)
+      .map(([date, count]) => ({ date, count }))
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }, [usersData]);
   if (loading) {
     return (
       <div className="app-shell">
@@ -1475,13 +1524,8 @@ export default function AdminPage() {
   }
 
   async function handleAppearanceSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    const nextSideGap = Math.max(8, Math.min(96, Number(appearanceForm.layoutSideGap || "32") || 32));
-
-    await updateSiteAppearanceSettings({
+    event.preventDefault();    await updateSiteAppearanceSettings({
       themeMode: appearanceForm.themeMode,
-      layoutSideGap: nextSideGap,
       heroVideoSliderEnabled: false,
       heroImageSliderEnabled: appearanceForm.heroImageSliderEnabled,
       logoMode: appearanceForm.logoMode,
@@ -1501,10 +1545,6 @@ export default function AdminPage() {
       geminiEnabled: appearanceForm.geminiEnabled,
       geminiModel: appearanceForm.geminiModel
     });
-
-    if (typeof window !== "undefined") {
-      document.documentElement.style.setProperty("--container-pad", `${nextSideGap}px`);
-    }
 
     setStatus("Appearance and SEO settings updated.");
     await refreshAll();
@@ -2369,6 +2409,8 @@ export default function AdminPage() {
               <div className="notice"><strong>Feedback count:</strong> {analytics.feedbackCount}</div>
               <div className="notice"><strong>Subscriptions:</strong> {subscriptions.length}</div>
               <div className="notice"><strong>Notifications:</strong> {notifications.length}</div>
+              <div className="notice"><strong>Total accounts:</strong> {usersData.length}</div>
+              <div className="notice"><strong>New accounts today:</strong> {userSignupsByDate.find((item) => item.date === new Date().toISOString().slice(0, 10))?.count ?? 0}</div>
               <div className="notice"><strong>Total visitors:</strong> {visitorAnalytics.totalVisitors}</div>
             </div>
             <div className="form-actions" style={{ marginTop: "0.8rem" }}>
@@ -2437,6 +2479,41 @@ export default function AdminPage() {
             )}
           </section>
 
+          <section className="admin-section admin-card" hidden={!isTabActive("general")}>
+            <h3>Users and Account Analytics</h3>
+            <p className="muted">View all user accounts, date-wise signup counts, and export user data.</p>
+            <div className="form-actions" style={{ marginBottom: "0.65rem" }}>
+              <button className="btn btn-outline" type="button" onClick={() => downloadUsersCsv(usersData)}>
+                Download Users CSV
+              </button>
+            </div>
+            <div className="table-like">
+              <div className="notice">
+                <strong>Date-wise account signups</strong>
+                {userSignupsByDate.length ? (
+                  userSignupsByDate.map((item) => (
+                    <p className="muted" key={`user-signup-${item.date}`}>
+                      {item.date}: {item.count}
+                    </p>
+                  ))
+                ) : (
+                  <p className="muted">No signup analytics yet.</p>
+                )}
+              </div>
+              <div className="notice">
+                <strong>Users ({usersData.length})</strong>
+                {usersData.length ? (
+                  usersData.slice(0, 200).map((item) => (
+                    <p className="muted" key={`admin-user-${item.uid}`}>
+                      {item.email || "no-email"} | {item.displayName || "no-name"} | {item.city || "no-city"} | role {item.role} | created {new Date(item.createdAt).toLocaleDateString()}
+                    </p>
+                  ))
+                ) : (
+                  <p className="muted">No users found.</p>
+                )}
+              </div>
+            </div>
+          </section>
           <section className="admin-section admin-card" hidden={!isTabActive("general")}>
             <h3>Social Links (Footer + Floating)</h3>
             <p className="muted">Manage social media links shown in footer and floating left icons.</p>
@@ -2748,7 +2825,7 @@ export default function AdminPage() {
           </section>
           <section className="admin-section admin-card" hidden={!isTabActive("seo")}>
             <h3>Theme, Logo, Preview and SEO Settings</h3>
-            <p className="muted">Manage dark mode, global page side gap, logo, preview gate, Gemini helper and SEO defaults.</p>
+            <p className="muted">Manage dark mode, logo, preview gate, Gemini helper and SEO defaults.</p>
             <form className="form-grid" onSubmit={handleAppearanceSubmit}>
               <select
                 value={appearanceForm.themeMode}
@@ -2759,14 +2836,6 @@ export default function AdminPage() {
                 <option value="light">Light theme</option>
                 <option value="dark">Dark theme</option>
               </select>
-              <input
-                type="number"
-                min={8}
-                max={96}
-                placeholder="Global side gap (px)"
-                value={appearanceForm.layoutSideGap}
-                onChange={(event) => setAppearanceForm((prev) => ({ ...prev, layoutSideGap: event.target.value }))}
-              />
               <label>
                 <input
                   type="checkbox"
@@ -4494,6 +4563,18 @@ export default function AdminPage() {
     </div>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

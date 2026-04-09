@@ -20,9 +20,9 @@
   --fm: "JetBrains Mono", monospace;
   --fc: "Barlow Condensed", sans-serif;
   --nav-h: 68px;
-  --container-max: 1680px;
-  --page-max: 1600px;
-  --container-pad: clamp(1rem, 2.2vw, 2rem);
+  --container-max: 1280px;
+  --page-max: 1180px;
+  --container-pad: clamp(0.9rem, 1.8vw, 1.4rem);
   --nav-bg: rgba(255, 255, 255, 0.94);
 }
 
@@ -37,6 +37,7 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--fb);
+  overflow-x: hidden;
 }
 
 a {
@@ -1019,6 +1020,44 @@ select {
   background: var(--bg-2);
   border-radius: 8px;
   padding: 0.8rem;
+}
+
+
+.course-detail-layout {
+  margin-top: 0.9rem;
+  display: grid;
+  grid-template-columns: minmax(230px, 300px) minmax(0, 1fr);
+  gap: 0.9rem;
+  align-items: start;
+}
+
+.course-detail-layout.single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.course-detail-sidebar {
+  position: sticky;
+  top: calc(var(--nav-h) + 0.9rem);
+}
+
+.course-detail-content {
+  min-width: 0;
+}
+
+.course-detail-content .muted {
+  overflow-wrap: anywhere;
+}
+
+
+@media (max-width: 980px) {
+  .course-detail-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .course-detail-sidebar {
+    position: static;
+    top: auto;
+  }
 }
 
 @media (max-width: 980px) {
@@ -2360,3 +2399,4 @@ html[data-theme="dark"] .visitor-count-highlight {
     justify-content: center;
   }
 }
+

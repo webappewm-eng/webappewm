@@ -167,16 +167,34 @@ service cloud.firestore {
       allow update, delete: if isAdmin();
     }
 
+
+    match /course_feedback/{docId} {
+      allow read: if isAdmin();
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.courseId is string
+        && request.resource.data.message is string
+        && request.resource.data.rating is int;
+      allow update, delete: if false;
+    }
+
     match /site_settings/{docId} {
       allow read: if true;
       allow write: if isAdmin();
     }
 
     match /users/{docId} {
-      allow read, write: if isAdmin();
+      allow read: if isAdmin() || (isSignedIn() && request.auth.uid == docId);
+      allow create: if isSignedIn() && request.auth.uid == docId;
+      allow update: if isAdmin() || (isSignedIn() && request.auth.uid == docId);
+      allow delete: if isAdmin();
     }
   }
 }
+
+
+
+
 
 
 

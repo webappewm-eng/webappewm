@@ -57,7 +57,6 @@ const loadSiteBootstrapSnapshot = unstable_cache(
     return {
       siteSettings: {
         themeMode: settings.themeMode,
-        layoutSideGap: settings.layoutSideGap,
         logoMode: settings.logoMode,
         logoImageUrl: settings.logoImageUrl,
         logoSize: settings.logoSize,
@@ -264,4 +263,5 @@ export async function getCachedWebinarBySlug(slug: string) {
     return null;
   }
 }
+
 

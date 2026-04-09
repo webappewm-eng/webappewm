@@ -63,7 +63,9 @@ import {
   UserCourseProgress,
   CertificateTemplate,
   LandingTopic,
-  UserCertificate
+  UserCertificate,
+  AdminUserRecord,
+  UserProfile
 } from "@/lib/types";
 
 const localStore = {
@@ -88,6 +90,7 @@ const localStore = {
   courseProgress: [] as UserCourseProgress[],
   certificateTemplates: [...mockCertificateTemplates],
   certificates: [] as UserCertificate[],
+  users: [] as AdminUserRecord[],
   communityCategories: [...mockCommunityCategories] as CommunityCategory[],
   communityQuestions: [] as CommunityQuestion[],
   communityAnswers: [] as CommunityAnswer[],
@@ -1317,33 +1320,211 @@ export async function getAnalyticsSummary(): Promise<AnalyticsSummary> {
   };
 }
 
-export async function upsertAdminProfile(uid: string, email: string): Promise<void> {
-  if (!hasFirebaseConfig || !db) {
+function mapUserRecord(id: string, data: Record<string, unknown>): AdminUserRecord {
+  const normalizedRole = sanitizeString(data.role).toLowerCase() === "admin" || data.isAdmin === true ? "admin" : "user";
+  return {
+    uid: id,
+    email: sanitizeString(data.email).toLowerCase(),
+    isAdmin: normalizedRole === "admin",
+    role: normalizedRole,
+    displayName: sanitizeString(data.displayName),
+    dateOfBirth: sanitizeString(data.dateOfBirth),
+    city: sanitizeString(data.city),
+    createdAt: normalizeDate(data.createdAt),
+    updatedAt: normalizeDate(data.updatedAt),
+    lastLoginAt: normalizeDate(data.lastLoginAt)
+  };
+}
+
+export async function upsertUserProfileFromAuth(input: {
+  uid: string;
+  email: string;
+  isAdmin: boolean;
+  displayName?: string;
+}): Promise<void> {
+  const uid = sanitizeString(input.uid);
+  if (!uid) {
     return;
   }
 
+  const email = sanitizeString(input.email).toLowerCase();
+  const displayName = sanitizeString(input.displayName);
+
+  if (!hasFirebaseConfig || !db) {
+    const now = new Date().toISOString();
+    const existingIndex = localStore.users.findIndex((item) => item.uid === uid);
+    const role: AdminUserRecord["role"] = input.isAdmin ? "admin" : "user";
+
+    if (existingIndex >= 0) {
+      const current = localStore.users[existingIndex];
+      localStore.users[existingIndex] = {
+        ...current,
+        email: email || current.email,
+        role: current.role === "admin" || role === "admin" ? "admin" : "user",
+        isAdmin: current.isAdmin || input.isAdmin,
+        displayName: displayName || current.displayName,
+        updatedAt: now,
+        lastLoginAt: now
+      };
+      return;
+    }
+
+    localStore.users.push({
+      uid,
+      email,
+      isAdmin: input.isAdmin,
+      role,
+      displayName,
+      dateOfBirth: "",
+      city: "",
+      createdAt: now,
+      updatedAt: now,
+      lastLoginAt: now
+    });
+    return;
+  }
+
+  const ref = doc(db, "users", uid);
+  const snap = await getDoc(ref);
+  const existing = snap.exists() ? (snap.data() as Record<string, unknown>) : {};
+  const existingRole = sanitizeString(existing.role).toLowerCase() === "admin" || existing.isAdmin === true ? "admin" : "user";
+  const nextRole: AdminUserRecord["role"] = input.isAdmin || existingRole === "admin" ? "admin" : "user";
+
   await setDoc(
-    doc(db, "users", uid),
+    ref,
     {
       email,
-      role: "admin",
-      updatedAt: serverTimestamp()
+      role: nextRole,
+      isAdmin: nextRole === "admin",
+      displayName: displayName || sanitizeString(existing.displayName),
+      updatedAt: serverTimestamp(),
+      lastLoginAt: serverTimestamp(),
+      ...(snap.exists() ? {} : { createdAt: serverTimestamp(), dateOfBirth: "", city: "" })
     },
     { merge: true }
   );
 }
 
+export async function upsertAdminProfile(uid: string, email: string): Promise<void> {
+  await upsertUserProfileFromAuth({ uid, email, isAdmin: true });
+}
 
+export async function getCurrentUserProfile(uid: string): Promise<UserProfile | null> {
+  const id = sanitizeString(uid);
+  if (!id) {
+    return null;
+  }
 
+  if (!hasFirebaseConfig || !db) {
+    const row = localStore.users.find((item) => item.uid === id);
+    if (!row) {
+      return null;
+    }
+    return {
+      uid: row.uid,
+      email: row.email || null,
+      isAdmin: row.isAdmin,
+      role: row.role,
+      displayName: row.displayName,
+      dateOfBirth: row.dateOfBirth,
+      city: row.city,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      lastLoginAt: row.lastLoginAt
+    };
+  }
 
+  const snap = await getDoc(doc(db, "users", id));
+  if (!snap.exists()) {
+    return null;
+  }
 
+  const row = mapUserRecord(snap.id, snap.data() as Record<string, unknown>);
+  return {
+    uid: row.uid,
+    email: row.email || null,
+    isAdmin: row.isAdmin,
+    role: row.role,
+    displayName: row.displayName,
+    dateOfBirth: row.dateOfBirth,
+    city: row.city,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    lastLoginAt: row.lastLoginAt
+  };
+}
 
+export async function updateCurrentUserProfile(
+  uid: string,
+  input: {
+    displayName?: string;
+    dateOfBirth?: string;
+    city?: string;
+  }
+): Promise<void> {
+  const id = sanitizeString(uid);
+  if (!id) {
+    return;
+  }
 
+  const patch = {
+    ...(input.displayName !== undefined ? { displayName: sanitizeString(input.displayName) } : {}),
+    ...(input.dateOfBirth !== undefined ? { dateOfBirth: sanitizeString(input.dateOfBirth) } : {}),
+    ...(input.city !== undefined ? { city: sanitizeString(input.city) } : {})
+  };
 
+  if (!hasFirebaseConfig || !db) {
+    const now = new Date().toISOString();
+    const existingIndex = localStore.users.findIndex((item) => item.uid === id);
+    if (existingIndex >= 0) {
+      localStore.users[existingIndex] = {
+        ...localStore.users[existingIndex],
+        ...patch,
+        updatedAt: now
+      };
+      return;
+    }
 
+    localStore.users.push({
+      uid: id,
+      email: "",
+      isAdmin: false,
+      role: "user",
+      displayName: sanitizeString(input.displayName),
+      dateOfBirth: sanitizeString(input.dateOfBirth),
+      city: sanitizeString(input.city),
+      createdAt: now,
+      updatedAt: now,
+      lastLoginAt: now
+    });
+    return;
+  }
 
+  await setDoc(
+    doc(db, "users", id),
+    {
+      ...patch,
+      updatedAt: serverTimestamp(),
+      ...(input.dateOfBirth === undefined ? {} : { dateOfBirth: sanitizeString(input.dateOfBirth) }),
+      ...(input.city === undefined ? {} : { city: sanitizeString(input.city) })
+    },
+    { merge: true }
+  );
+}
 
+export async function getUsersForAdmin(): Promise<AdminUserRecord[]> {
+  if (!hasFirebaseConfig || !db) {
+    return [...localStore.users].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
 
+  try {
+    const snap = await getDocs(query(collection(db, "users"), orderBy("createdAt", "desc")));
+    return snap.docs.map((item) => mapUserRecord(item.id, item.data() as Record<string, unknown>));
+  } catch {
+    const snap = await getDocs(collection(db, "users"));
+    return sortByDateDesc(snap.docs.map((item) => mapUserRecord(item.id, item.data() as Record<string, unknown>)));
+  }
+}
 
 function normalizeShortcodeFromSlug(slug: string): string {
   const clean = slug.trim().toLowerCase();
@@ -2868,5 +3049,9 @@ export async function getVisitorCountryAnalyticsByDate(date: string): Promise<Ar
     .map(([country, count]) => ({ country, count }))
     .sort((a, b) => b.count - a.count || a.country.localeCompare(b.country));
 }
+
+
+
+
 
 

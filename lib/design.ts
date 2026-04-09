@@ -1,4 +1,4 @@
-﻿export function buildDesignDocument(html: string, css: string, js: string): string {
+export function buildDesignDocument(html: string, css: string, js: string): string {
   const safeHtml = html || "";
   const safeCss = css || "";
   const safeJs = (js || "").replace(/<\/script>/gi, "<\\/script>");

@@ -416,7 +416,7 @@ export function CourseDetailClient({ course, ads = [], nextCourse = null }: Cour
         </div>
       </section>
 
-      <section className="post-content" style={{ marginTop: "1rem" }}>
+      <section className="post-content" style={{ marginTop: "1rem", display: user?.uid ? "block" : "none" }}>
         <div className="post-content-inner">
           <div className="label">Certification</div>
 
@@ -425,7 +425,7 @@ export function CourseDetailClient({ course, ads = [], nextCourse = null }: Cour
               <p className="course-cert-cta-eyebrow">Certification Test</p>
               <h3>Complete Test to Get Certified</h3>
               <p>
-                Login is required. Finish all sections, answer every question, and pass {course.passingScore}% to generate your certificate.
+                Finish all sections, answer every question, and pass {course.passingScore}% to generate your certificate.
               </p>
               <div className="course-cert-cta-meta">
                 <span>Pass mark: {course.passingScore}%</span>
@@ -536,5 +536,8 @@ export function CourseDetailClient({ course, ads = [], nextCourse = null }: Cour
     </>
   );
 }
+
+
+
 
 

@@ -158,8 +158,7 @@ export function Header({ onOpenLogin, searchValue = "", onSearchChange, showSear
     const nextMode = preferred || bootstrap.siteSettings.themeMode;
     setThemeMode(nextMode);
     document.documentElement.setAttribute("data-theme", nextMode);
-    document.documentElement.style.setProperty("--container-pad", `${bootstrap.siteSettings.layoutSideGap}px`);
-  }, [bootstrap.siteSettings.themeMode, bootstrap.siteSettings.layoutSideGap]);
+  }, [bootstrap.siteSettings.themeMode]);
 
   function toggleTheme() {
     const nextMode: "light" | "dark" = themeMode === "dark" ? "light" : "dark";
@@ -290,3 +289,4 @@ export function Header({ onOpenLogin, searchValue = "", onSearchChange, showSear
     </>
   );
 }
+

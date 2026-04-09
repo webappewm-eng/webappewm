@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 import "./globals.css";
 import { AuthProvider } from "@/components/auth/AuthProvider";
 import { LiveTracker } from "@/components/layout/LiveTracker";
@@ -65,10 +65,8 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   const bootstrap = await getCachedSiteBootstrapSnapshot();
   const themeMode = bootstrap.siteSettings.themeMode;
-  const layoutSideGap = bootstrap.siteSettings.layoutSideGap;
-
   return (
-    <html lang="en" data-theme={themeMode} style={{ "--container-pad": `${layoutSideGap}px` } as CSSProperties}>
+    <html lang="en" data-theme={themeMode}>
       <body>
         <AuthProvider>
           <SiteBootstrapProvider snapshot={bootstrap}>
@@ -83,3 +81,4 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     </html>
   );
 }
+

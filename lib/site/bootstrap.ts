@@ -2,7 +2,7 @@ import { NavigationLink, SiteSettings, SocialLink } from "@/lib/types";
 
 export type SiteChromeSettings = Pick<
   SiteSettings,
-  "themeMode" | "layoutSideGap" | "logoMode" | "logoImageUrl" | "logoSize" | "logoTitleLine1" | "logoTitleLine2" | "logoAccentText"
+  "themeMode" | "logoMode" | "logoImageUrl" | "logoSize" | "logoTitleLine1" | "logoTitleLine2" | "logoAccentText"
 >;
 
 export interface SiteBootstrapSnapshot {
@@ -96,7 +96,6 @@ export const fallbackFooterLinks: NavigationLink[] = [
 
 export const fallbackSiteChromeSettings: SiteChromeSettings = {
   themeMode: "light",
-  layoutSideGap: 32,
   logoMode: "text",
   logoImageUrl: "",
   logoSize: 38,
@@ -113,3 +112,4 @@ export const fallbackSiteBootstrapSnapshot: SiteBootstrapSnapshot = {
   floatingSocialLinks: [],
   visitorCount: 0
 };
+

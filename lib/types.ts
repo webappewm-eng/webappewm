@@ -67,6 +67,26 @@ export interface UserProfile {
   uid: string;
   email: string | null;
   isAdmin: boolean;
+  role?: "admin" | "user";
+  displayName?: string;
+  dateOfBirth?: string;
+  city?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  lastLoginAt?: string;
+}
+
+export interface AdminUserRecord {
+  uid: string;
+  email: string;
+  isAdmin: boolean;
+  role: "admin" | "user";
+  displayName: string;
+  dateOfBirth: string;
+  city: string;
+  createdAt: string;
+  updatedAt: string;
+  lastLoginAt: string;
 }
 
 export interface CustomPage {
@@ -236,6 +256,11 @@ export interface Course {
   questions: CourseQuestion[];
   adsEnabled: boolean;
   adIds: string[];
+  customLandingEnabled?: boolean;
+  customLandingSlug?: string;
+  landingHtml?: string;
+  landingCss?: string;
+  landingJs?: string;
   isPublished: boolean;
   updatedAt: string;
 }
@@ -380,6 +405,8 @@ export interface LandingTopic {
   isPublished: boolean;
   updatedAt: string;
 }
+
+
 
 
 

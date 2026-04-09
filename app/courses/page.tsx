@@ -3,7 +3,6 @@ import Image from "next/image";
 import Link from "next/link";
 import { Footer } from "@/components/layout/Footer";
 import { Header } from "@/components/layout/Header";
-import { CertificationDashboardPanel } from "@/components/courses/CertificationDashboardPanel";
 import { getCachedCoursesPageData } from "@/lib/server/page-cache";
 
 export const revalidate = 60;
@@ -69,7 +68,6 @@ export default async function CoursesPage({ searchParams }: CoursesPageProps) {
           <h1 className="h2">Courses and Certification Programs</h1>
           <p className="body-txt">Complete lessons, unlock tests, and download certificates.</p>
 
-          <CertificationDashboardPanel />
 
           <div className="courses-page-layout">
             <aside className="courses-sidebar-tree">
